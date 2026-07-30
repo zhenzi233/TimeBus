@@ -1,0 +1,35 @@
+repositories {
+    maven {
+        name = 'CurseMaven'
+        url = 'https://cursemaven.com'
+    }
+    maven {
+        name = 'CleanroomCurseMaven'
+        url = 'https://curse.cleanroommc.com'
+    }
+    maven {
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+    }
+    mavenCentral()
+    maven {
+        name = 'JEI'
+        url = 'https://dvs1.progwml6.com/files/maven'
+    }
+    mavenLocal()
+}
+
+dependencies {
+    compileOnly "com.cleanroommc:sponge-mixin:0.20.13+mixin.0.8.7"
+    modImplementation "mezz.jei:jei_1.12.2:4.16.1.302"
+    // AE2 UEL - 通过 CurseMaven 自动下载
+    modImplementation "curse.maven:ae2-extended-life-570458:6302098"
+    // The One Probe
+    modImplementation "curse.maven:the-one-probe-245211:2667280"
+    // MouseTweaks Unofficial (Cleanroom fork, contains IMTModGuiContainer2)
+    implementation "curse.maven:mouse-tweaks-unofficial-461660:5876158"
+
+    if (enable_lwjglx.toBoolean()) {
+        compileOnly "com.cleanroommc:lwjglx:1.0.0"
+    }
+}

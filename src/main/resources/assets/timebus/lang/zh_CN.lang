@@ -1,0 +1,12 @@
+item.timebus.time_bus.name=时间总线
+tile.timebus.time_bus.name=时间总线
+fluid.time_fluid=时间流体
+item.bucket.time_fluid=时间流体桶
+gui.timebus.title=ME 时间总线
+gui.timebus.speed=速度: %1$d倍（%2$d张卡）
+gui.timebus.power=耗电: %1$.1f AE/t
+gui.timebus.range=范围: %1$d 格
+gui.timebus.fluid_title=消耗流体: %1$s
+gui.timebus.fluid_rate=速率: %1$.1f mB/t
+
+key.categories.timebus=时间总线

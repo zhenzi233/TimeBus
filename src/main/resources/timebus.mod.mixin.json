@@ -1,0 +1,12 @@
+{
+    "required": true,
+    "package": "com.zhenzi233.timebus.mixin.mod",
+    "compatibilityLevel": "JAVA_8",
+    "target": "@env(MOD)",
+    "client": [],
+    "mixins": [],
+    "server": [],
+    "plugin": "com.zhenzi233.timebus.mixin.TimeBusMixinConfigPlugin",
+    "setSourceFile": true,
+    "minVersion": "0.8.7"
+}

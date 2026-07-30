@@ -1,0 +1,12 @@
+item.timebus.time_bus.name=Time Bus
+tile.timebus.time_bus.name=Time Bus
+fluid.time_fluid=Time Fluid
+item.bucket.time_fluid=Time Fluid Bucket
+gui.timebus.title=ME Time Bus
+gui.timebus.speed=Speed: %1$dx (%2$d cards)
+gui.timebus.power=Power: %1$.1f AE/t
+gui.timebus.range=Range: %1$d blk
+gui.timebus.fluid_title=Consuming: %1$s
+gui.timebus.fluid_rate=Rate: %1$.1f mB/t
+
+key.categories.timebus=Time Bus

@@ -1,0 +1,12 @@
+[{
+	"modid": "timebus",
+	"name": "Time Bus",
+	"version": "${mod_version}",
+	"mcversion": "1.12.2",
+	"description": "A time acceleration block that speeds up blocks on its facing side.",
+	"authorList": ["zhenzi233"],
+	"credits": "",
+	"url": "",
+	"updateJSON": "",
+	"logoFile": ""
+}]

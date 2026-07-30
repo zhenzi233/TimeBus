@@ -1,0 +1,13 @@
+{
+    "required": true,
+    "package": "com.zhenzi233.timebus.mixin",
+    "compatibilityLevel": "JAVA_8",
+    "target": "@env(DEFAULT)",
+    "client": [],
+    "mixins": [
+        "MixinWorldServer"
+    ],
+    "server": [],
+    "setSourceFile": true,
+    "minVersion": "0.8.7"
+}
