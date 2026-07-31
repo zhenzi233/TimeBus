@@ -5,6 +5,7 @@ item.bucket.time_fluid=时间流体桶
 gui.timebus.title=ME 时间总线
 gui.timebus.speed=速度: %1$d倍（%2$d张卡）
 gui.timebus.power=耗电: %1$.1f AE/t
+gui.timebus.budget=预算: %1$d/%2$d 次调用
 gui.timebus.range=范围: %1$d 格
 gui.timebus.fluid_title=消耗流体: %1$s
 gui.timebus.fluid_rate=速率: %1$.1f mB/t

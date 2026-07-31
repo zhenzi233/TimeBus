@@ -77,6 +77,15 @@ public class TimeBusConfig {
     })
     public static String capacityWidths = "1,3,9,15";
 
+    @Name("Max Calls per Tick (Work Budget)")
+    @Comment({
+        "Maximum number of acceleration calls (tile updates + random ticks) executed per server tick.",
+        "Work beyond this budget is carried over to the next tick, keeping the server tick smooth",
+        "even with max speed cards and a wide range. Default: 128"
+    })
+    @RangeInt(min = 1, max = 100000)
+    public static int maxCallsPerTick = 128;
+
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {
         @SubscribeEvent

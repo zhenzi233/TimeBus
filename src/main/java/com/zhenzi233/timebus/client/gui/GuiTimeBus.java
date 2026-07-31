@@ -71,6 +71,14 @@ public class GuiTimeBus extends GuiUpgradeable {
             this.fontRenderer.drawString(powerText, 8, yOffset, 4210752);
             yOffset += 12;
 
+            // Work budget usage (synced via AE2 @GuiSync)
+            ContainerTimeBus container = (ContainerTimeBus) this.cvb;
+            int used = container.budgetUsed;
+            int total = container.budgetTotal;
+            String budgetText = TextFormatting.GREEN + I18n.format("gui.timebus.budget", used, total);
+            this.fontRenderer.drawString(budgetText, 8, yOffset, 4210752);
+            yOffset += 12;
+
             // Fluid mode info
             if (TimeBusConfig.fluidMode) {
                 this.fontRenderer.drawString(TextFormatting.DARK_AQUA + I18n.format("gui.timebus.fluid_title", part.getFluidDisplayName()), 8, yOffset, 4210752);

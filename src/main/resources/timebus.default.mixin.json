@@ -4,9 +4,7 @@
     "compatibilityLevel": "JAVA_8",
     "target": "@env(DEFAULT)",
     "client": [],
-    "mixins": [
-        "MixinWorldServer"
-    ],
+    "mixins": [],
     "server": [],
     "setSourceFile": true,
     "minVersion": "0.8.7"

@@ -79,6 +79,21 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         @Override public <T> Optional<T> context(Class<T> key) { return Optional.empty(); }
     };
 
+    // --- Work budget state ---
+    // Acceleration work is measured in "calls" (scheduleBlockUpdate / ITickable.update / Block.updateTick).
+    // Each server tick the Time Bus executes at most maxCallsPerTick calls and carries the remainder
+    // to the next tick, so a fully-upgraded bus never spikes the server tick.
+    private static final int PHASE_SCHEDULE = 0;
+    private static final int PHASE_TILE = 1;
+    private static final int PHASE_RANDOM = 2;
+
+    private int workBlockIndex = 0;      // which block (0..capacityWidth-1) is currently being processed
+    private int workPhase = PHASE_SCHEDULE; // phase of the current block
+    private int workPhaseRemaining = 0;  // calls left in the current phase
+    private boolean workActive = false;  // true while a work batch is in progress
+    private int budgetUsedLastTick = 0;  // calls actually spent last tick (for GUI)
+    private int budgetTotalLastTick = 0; // budget available last tick (for GUI)
+
     @Override
     public IItemHandler getInventoryByName(String name) {
         if (name.equals("config")) {
@@ -102,9 +117,15 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public int getEffectiveSpeed() {
-        String[] parts = TimeBusConfig.speedMultipliers.split(",");
-        int idx = Math.min(getCardCount(), parts.length - 1);
-        return Integer.parseInt(parts[idx].trim());
+        try {
+            String[] parts = TimeBusConfig.speedMultipliers.split(",");
+            if (parts.length == 0) return 1;
+            int idx = Math.min(getCardCount(), parts.length - 1);
+            return Math.max(1, Integer.parseInt(parts[idx].trim()));
+        } catch (NumberFormatException | NullPointerException e) {
+            TimeBus.LOGGER.warn("Invalid speedMultipliers config: '{}'", TimeBusConfig.speedMultipliers);
+            return 1;
+        }
     }
 
     private int getTotalUpgrades() {
@@ -129,9 +150,15 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public int getCapacityWidth() {
-        String[] parts = TimeBusConfig.capacityWidths.split(",");
-        int idx = Math.min(this.getInstalledUpgrades(Upgrades.CAPACITY), parts.length - 1);
-        return Integer.parseInt(parts[idx].trim());
+        try {
+            String[] parts = TimeBusConfig.capacityWidths.split(",");
+            if (parts.length == 0) return 1;
+            int idx = Math.min(this.getInstalledUpgrades(Upgrades.CAPACITY), parts.length - 1);
+            return Math.max(1, Integer.parseInt(parts[idx].trim()));
+        } catch (NumberFormatException | NullPointerException e) {
+            TimeBus.LOGGER.warn("Invalid capacityWidths config: '{}'", TimeBusConfig.capacityWidths);
+            return 1;
+        }
     }
 
     @Override
@@ -220,11 +247,154 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             return; // Not enough fluid to operate
         }
         int speed = getEffectiveSpeed();
-        AEPartLocation facing = this.getSide();
-        BlockPos start = getHost().getTile().getPos().offset(facing.getFacing());
-        for (int i = 0; i < getCapacityWidth(); i++) {
-            accelerateBlock(start.offset(facing.getFacing(), i), speed);
+        int width = getCapacityWidth();
+        int budget = Math.max(1, TimeBusConfig.maxCallsPerTick);
+        int used = 0;
+
+        if (!workActive) {
+            // Start a fresh batch over the whole width.
+            workBlockIndex = 0;
+            workPhase = PHASE_SCHEDULE;
+            workPhaseRemaining = 0;
+            workActive = true;
         }
+
+        AEPartLocation facing = this.getSide();
+        net.minecraft.world.World world = getHost().getTile().getWorld();
+        BlockPos start = getHost().getTile().getPos().offset(facing.getFacing());
+
+        while (used < budget && workActive) {
+            if (workBlockIndex >= width) {
+                workActive = false;
+                break;
+            }
+            BlockPos target = start.offset(facing.getFacing(), workBlockIndex);
+            IBlockState targetState = world.getBlockState(target);
+            Block targetBlock = targetState.getBlock();
+
+            switch (workPhase) {
+                case PHASE_SCHEDULE: {
+                    if (!targetBlock.isAir(targetState, world, target)) {
+                        try {
+                            // MC dedupes scheduled updates by (pos, block), so one call is enough.
+                            world.scheduleBlockUpdate(target, targetBlock, 1, 0);
+                        } catch (Exception e) {
+                            TimeBus.LOGGER.warn("Time Bus: scheduleBlockUpdate failed at {}: {}", target, e.toString());
+                        }
+                    }
+                    used++;
+                    TileEntity targetTE = world.getTileEntity(target);
+                    if (targetTE instanceof ITickable) {
+                        workPhase = PHASE_TILE;
+                        workPhaseRemaining = Math.max(0, speed - 1);
+                        if (workPhaseRemaining == 0) {
+                            advancePhase(targetBlock, target, world, speed);
+                        }
+                    } else {
+                        advancePhase(targetBlock, target, world, speed);
+                    }
+                    break;
+                }
+                case PHASE_TILE: {
+                    int n = Math.min(workPhaseRemaining, budget - used);
+                    n = runTileUpdates(target, n);
+                    used += n;
+                    workPhaseRemaining -= n;
+                    if (workPhaseRemaining <= 0) {
+                        advancePhase(targetBlock, target, world, speed);
+                    } else if (n <= 0) {
+                        // No progress possible (TE removed / not ITickable): force advance.
+                        workPhaseRemaining = 0;
+                        advancePhase(targetBlock, target, world, speed);
+                    }
+                    break;
+                }
+                case PHASE_RANDOM: {
+                    int n = Math.min(workPhaseRemaining, budget - used);
+                    n = runRandomTicks(target, n, targetState, targetBlock, world);
+                    used += n;
+                    workPhaseRemaining -= n;
+                    if (workPhaseRemaining <= 0) {
+                        workBlockIndex++;
+                        workPhase = PHASE_SCHEDULE;
+                        workPhaseRemaining = 0;
+                    } else if (n <= 0) {
+                        // No progress possible (every call failed): force advance.
+                        workPhaseRemaining = 0;
+                        workBlockIndex++;
+                        workPhase = PHASE_SCHEDULE;
+                    }
+                    break;
+                }
+                default:
+                    workActive = false;
+            }
+        }
+
+        budgetUsedLastTick = used;
+        budgetTotalLastTick = budget;
+    }
+
+    /** Advance to the next phase of the current block (or the next block). */
+    private void advancePhase(Block targetBlock, BlockPos target, net.minecraft.world.World world, int speed) {
+        // Move on to random ticks if this block uses them and we have not done so yet.
+        if (workPhase != PHASE_RANDOM && targetBlock.getTickRandomly()) {
+            workPhase = PHASE_RANDOM;
+            workPhaseRemaining = Math.max(1, speed * 20);
+            return;
+        }
+        workBlockIndex++;
+        workPhase = PHASE_SCHEDULE;
+        workPhaseRemaining = 0;
+    }
+
+    /** Run up to {@code n} ITickable.update() calls; returns how many actually ran. */
+    private int runTileUpdates(BlockPos target, int n) {
+        if (n <= 0) return 0;
+        net.minecraft.world.World world = getHost().getTile().getWorld();
+        TileEntity targetTE = world.getTileEntity(target);
+        if (!(targetTE instanceof ITickable)) return 0;
+        ITickable tickable = (ITickable) targetTE;
+        int ran = 0;
+        for (int i = 0; i < n; i++) {
+            try {
+                tickable.update();
+                ran++;
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: ITickable.update failed at {}: {}", target, e.toString());
+                break;
+            }
+        }
+        return ran;
+    }
+
+    /** Run up to {@code n} Block.updateTick calls; returns how many actually ran. */
+    private int runRandomTicks(BlockPos target, int n, IBlockState targetState, Block targetBlock, net.minecraft.world.World world) {
+        if (n <= 0 || !targetBlock.getTickRandomly()) return 0;
+        int ran = 0;
+        // Re-check the block state occasionally instead of every call.
+        for (int i = 0; i < n; i++) {
+            if (ran % 20 == 0 && world.getBlockState(target) != targetState) {
+                break;
+            }
+            try {
+                targetBlock.updateTick(world, target, targetState, world.rand);
+                ran++;
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: updateTick failed at {}: {}", target, e.toString());
+                break;
+            }
+        }
+        return ran;
+    }
+
+    // Budget usage info for the GUI.
+    public int getBudgetUsedLastTick() {
+        return budgetUsedLastTick;
+    }
+
+    public int getBudgetTotalLastTick() {
+        return budgetTotalLastTick;
     }
 
     private boolean consumeFluid() {
@@ -259,29 +429,6 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         }
     }
 
-    private void accelerateBlock(BlockPos targetPos, int speed) {
-        net.minecraft.world.World world = getHost().getTile().getWorld();
-        IBlockState targetState = world.getBlockState(targetPos);
-        Block targetBlock = targetState.getBlock();
-        if (targetBlock.isAir(targetState, world, targetPos)) return;
-
-        for (int i = 0; i < speed; i++) {
-            world.scheduleBlockUpdate(targetPos, targetBlock, 1, 0);
-        }
-        TileEntity targetTE = world.getTileEntity(targetPos);
-        if (targetTE instanceof ITickable) {
-            ITickable tickable = (ITickable) targetTE;
-            for (int i = 0; i < speed - 1; i++) {
-                tickable.update();
-            }
-        }
-        if (targetBlock.getTickRandomly()) {
-            for (int i = 0; i < speed * 20; i++) {
-                if (world.getBlockState(targetPos) != targetState) break;
-                targetBlock.updateTick(world, targetPos, targetState, world.rand);
-            }
-        }
-    }
 
     private void extractAEPower(int ticksSinceLastCall) {
         if (TimeBusConfig.fluidMode) return;

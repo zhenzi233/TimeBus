@@ -5,6 +5,7 @@ item.bucket.time_fluid=Time Fluid Bucket
 gui.timebus.title=ME Time Bus
 gui.timebus.speed=Speed: %1$dx (%2$d cards)
 gui.timebus.power=Power: %1$.1f AE/t
+gui.timebus.budget=Budget: %1$d/%2$d calls
 gui.timebus.range=Range: %1$d blk
 gui.timebus.fluid_title=Consuming: %1$s
 gui.timebus.fluid_rate=Rate: %1$.1f mB/t
