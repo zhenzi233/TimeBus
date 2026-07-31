@@ -1,5 +1,6 @@
 package com.zhenzi233.timebus.proxy;
 
+import com.zhenzi233.timebus.item.ItemDebugWand;
 import com.zhenzi233.timebus.part.ItemTimeBus;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
@@ -12,6 +13,9 @@ public class CommonProxy implements IProxy {
         // Fluids are registered in TimeBus.preInit before the proxy runs.
         ItemTimeBus.ITEM = new ItemTimeBus();
         GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemTimeBus.ITEM);
+
+        ItemDebugWand.ITEM = new ItemDebugWand();
+        GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemDebugWand.ITEM);
     }
 
     @Override

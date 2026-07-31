@@ -1,7 +1,8 @@
 item.timebus.time_bus.name=Time Bus
+item.timebus.debug_wand.name=Debug Wand
 tile.timebus.time_bus.name=Time Bus
+tile.timebus.time_generator.name=Time Fluid Generator
 fluid.time_fluid=Time Fluid
-item.bucket.time_fluid=Time Fluid Bucket
 gui.timebus.title=ME Time Bus
 gui.timebus.speed=Speed: %1$dx (%2$d cards)
 gui.timebus.power=Power: %1$.1f AE/t
@@ -9,5 +10,11 @@ gui.timebus.budget=Budget: %1$d/%2$d calls
 gui.timebus.range=Range: %1$d blk
 gui.timebus.fluid_title=Consuming: %1$s
 gui.timebus.fluid_rate=Rate: %1$.1f mB/t
+gui.timebus.inventory=Inventory
+gui.timebus.generator.title=Time Fluid Generator
+gui.timebus.generator.fluid=Time Fluid: %1$d/%2$d mB
+gui.timebus.generator.input=Input: Matter Ball or Singularity
+gui.timebus.generator.balls=Matter Balls: %1$d fed
+gui.timebus.generator.singularities=Singularities: %1$d fed
 
 key.categories.timebus=Time Bus

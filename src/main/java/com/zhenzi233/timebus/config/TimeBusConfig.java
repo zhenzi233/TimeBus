@@ -86,6 +86,35 @@ public class TimeBusConfig {
     @RangeInt(min = 1, max = 100000)
     public static int maxCallsPerTick = 128;
 
+    // --- Time Fluid Generator ---
+
+    @Name("Matter Balls per Batch")
+    @Comment({
+        "How many Matter Balls must be fed in before one batch of Time Fluid is produced.",
+        "Mirrors the Matter Condenser: inputs accumulate until the required amount is met.",
+        "Default: 256"
+    })
+    @RangeInt(min = 1, max = 1000000000)
+    public static int matterBallsPerBatch = 256;
+
+    @Name("Time Fluid per Matter Ball Batch (mB)")
+    @Comment("How many millibuckets of Time Fluid one full Matter Ball batch produces. Default: 1")
+    @RangeDouble(min = 1.0, max = 1000000000.0)
+    public static double timePerMatterBallBatch = 1.0;
+
+    @Name("Singularities per Batch")
+    @Comment({
+        "How many Singularities must be fed in before one batch of Time Fluid is produced.",
+        "Default: 256"
+    })
+    @RangeInt(min = 1, max = 1000000000)
+    public static int singularitiesPerBatch = 256;
+
+    @Name("Time Fluid per Singularity Batch (mB)")
+    @Comment("How many millibuckets of Time Fluid one full Singularity batch produces. Default: 10000")
+    @RangeDouble(min = 1.0, max = 1000000000.0)
+    public static double timePerSingularityBatch = 10000.0;
+
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {
         @SubscribeEvent

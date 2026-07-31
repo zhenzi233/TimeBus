@@ -34,7 +34,10 @@ public class TimeBusFluids {
                     TIME_FLUID.getName(), existing == null ? "not registered" : "owned by another mod");
             return;
         }
+        // Universal bucket support (Cleanroom registers fluids for the universal bucket;
+        // no standalone bucket item is created - use the debug wand to spawn fluid).
         FluidRegistry.addBucketForFluid(TIME_FLUID);
+
         // Block must be created AFTER fluid registration (BlockFluidClassic calls FluidStack internally)
         TIME_FLUID_BLOCK = new BlockFluidClassic(TIME_FLUID, Material.WATER)
                 .setRegistryName(TimeBus.MOD_ID, "time_fluid");

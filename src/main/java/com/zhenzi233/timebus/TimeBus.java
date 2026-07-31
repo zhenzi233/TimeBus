@@ -4,11 +4,15 @@ import appeng.api.AEApi;
 import appeng.api.config.Upgrades;
 import appeng.api.definitions.IItemDefinition;
 import appeng.core.sync.GuiWrapper;
+import com.zhenzi233.timebus.block.BlockTimeGenerator;
 import com.zhenzi233.timebus.client.gui.GuiHandler;
 import com.zhenzi233.timebus.client.gui.TimeBusGui;
 import com.zhenzi233.timebus.fluid.TimeBusFluids;
 import com.zhenzi233.timebus.part.ItemTimeBus;
 import com.zhenzi233.timebus.proxy.IProxy;
+import com.zhenzi233.timebus.tile.TileTimeGenerator;
+import net.minecraft.block.Block;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
@@ -16,6 +20,7 @@ import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
+import net.minecraftforge.fml.common.registry.GameRegistry;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -51,6 +56,13 @@ public class TimeBus {
 
         // Register Time Fluid (must run before proxy.preInit)
         TimeBusFluids.register();
+
+        // Register Time Fluid Generator block + tile entity
+        Block blockTimeGenerator = new BlockTimeGenerator();
+        GameRegistry.findRegistry(Block.class).register(blockTimeGenerator);
+        GameRegistry.findRegistry(net.minecraft.item.Item.class).register(
+                new ItemBlock(blockTimeGenerator).setRegistryName(blockTimeGenerator.getRegistryName()));
+        GameRegistry.registerTileEntity(TileTimeGenerator.class, new ResourceLocation(MOD_ID, "time_generator"));
 
         proxy.preInit(event);
 

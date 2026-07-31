@@ -1,7 +1,8 @@
 item.timebus.time_bus.name=时间总线
+item.timebus.debug_wand.name=调试棒
 tile.timebus.time_bus.name=时间总线
+tile.timebus.time_generator.name=时间流体发生器
 fluid.time_fluid=时间流体
-item.bucket.time_fluid=时间流体桶
 gui.timebus.title=ME 时间总线
 gui.timebus.speed=速度: %1$d倍（%2$d张卡）
 gui.timebus.power=耗电: %1$.1f AE/t
@@ -9,5 +10,11 @@ gui.timebus.budget=预算: %1$d/%2$d 次调用
 gui.timebus.range=范围: %1$d 格
 gui.timebus.fluid_title=消耗流体: %1$s
 gui.timebus.fluid_rate=速率: %1$.1f mB/t
+gui.timebus.inventory=物品栏
+gui.timebus.generator.title=时间流体发生器
+gui.timebus.generator.fluid=时间流体: %1$d/%2$d mB
+gui.timebus.generator.input=输入: 物质球或奇点
+gui.timebus.generator.balls=物质球: %1$d 个已投入
+gui.timebus.generator.singularities=奇点: %1$d 个已投入
 
 key.categories.timebus=时间总线
