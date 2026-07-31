@@ -63,6 +63,11 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config):
 - Mixins: Cleanroom sponge-mixin (`0.8.7`)
 - IDE run configs are generated as `1. Build`, `2. Run Client`, `3. Run Server` (IntelliJ Gradle tasks)
 
+## Contributors
+
+- **zhenzi233** — author, design, testing
+- **Codewhale** — AI coding assistance (crash fixes, work-budget performance model, GUI budget sync, build verification)
+
 ## License
 
 MIT © zhenzi233
