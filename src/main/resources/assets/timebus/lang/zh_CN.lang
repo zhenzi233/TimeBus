@@ -1,5 +1,6 @@
 item.timebus.time_bus.name=时间总线
 item.timebus.debug_wand.name=调试棒
+item.timebus.time_wand.name=时间杖
 tile.timebus.time_bus.name=时间总线
 tile.timebus.time_generator.name=时间流体发生器
 fluid.time_fluid=时间流体

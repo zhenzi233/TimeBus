@@ -17,6 +17,30 @@ An **Applied Energistics 2** addon for Minecraft 1.12.2 (CleanroomLoader) that a
 - **Performance-safe**: a work budget caps the number of acceleration calls per server tick (`maxCallsPerTick`, default 128), so fully-upgraded buses never spike the tick; excess work carries over to the next tick.
 - **GUI**: shows current speed, range, power draw, and live work-budget usage.
 
+### Time Fluid
+
+- Bundled fluid **`time_fluid`**, storable/extractable through the ME network.
+- Entering a Time Fluid block grants **Speed III + Haste III for 10 seconds**.
+- Can be spawned quickly with the Debug Wand (below).
+
+### Debug Wand
+
+- Right-click air while holding the **Debug Wand** to spawn a Time Fluid source block — handy for testing.
+
+### Time Fluid Generator
+
+A Matter-Condenser-style block that converts materials into Time Fluid:
+
+- **Input**: Matter Balls or Singularities, switched with a GUI button (two modes only, no destroy mode).
+- **Conversion** (configurable, defaults):
+  - 64000 Matter Balls = 1000 mB of Time Fluid
+  - 64 Singularities = 1000 mB of Time Fluid (1 Singularity = 1000 Matter Ball units)
+- **Progress retention**: progress accumulates in unified "units", so switching input mode mid-way keeps the progress.
+- **Storage component**: insert an AE2 storage component (1k/4k/16k…) to decide the fluid buffer capacity.
+- **GUI**: vertical progress bar for production, fluid tank shows the stored amount (full coverage with a bucket-number overlay at the bottom-right), hover tooltip shows the name and mB.
+- **Bottling / pouring**: click the fluid tank with a fluid container (bucket, AE2 portable fluid cell, …) to fill or empty it.
+- **No AE power cost**: pure material conversion.
+
 ## Requirements
 
 - Minecraft 1.12.2

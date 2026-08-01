@@ -39,7 +39,7 @@ public class TimeBusFluids {
         FluidRegistry.addBucketForFluid(TIME_FLUID);
 
         // Block must be created AFTER fluid registration (BlockFluidClassic calls FluidStack internally)
-        TIME_FLUID_BLOCK = new BlockFluidClassic(TIME_FLUID, Material.WATER)
+        TIME_FLUID_BLOCK = new BlockTimeFluid(TIME_FLUID, Material.WATER)
                 .setRegistryName(TimeBus.MOD_ID, "time_fluid");
         GameRegistry.findRegistry(Block.class).register(TIME_FLUID_BLOCK);
         TIME_FLUID.setBlock(TIME_FLUID_BLOCK);

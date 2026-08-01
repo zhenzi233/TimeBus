@@ -1,5 +1,6 @@
 item.timebus.time_bus.name=Time Bus
 item.timebus.debug_wand.name=Debug Wand
+item.timebus.time_wand.name=Time Wand
 tile.timebus.time_bus.name=Time Bus
 tile.timebus.time_generator.name=Time Fluid Generator
 fluid.time_fluid=Time Fluid

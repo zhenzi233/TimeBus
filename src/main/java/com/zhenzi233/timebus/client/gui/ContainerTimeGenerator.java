@@ -1,11 +1,17 @@
 package com.zhenzi233.timebus.client.gui;
 
+import appeng.api.AEApi;
+import appeng.api.config.Actionable;
 import appeng.api.config.CondenserOutput;
+import appeng.api.storage.ICellInventoryHandler;
+import appeng.api.storage.channels.IFluidStorageChannel;
+import appeng.api.storage.data.IAEFluidStack;
 import appeng.container.AEBaseContainer;
 import appeng.container.guisync.GuiSync;
 import appeng.container.interfaces.IProgressProvider;
 import appeng.container.slot.SlotRestrictedInput;
 import appeng.util.Platform;
+import com.zhenzi233.timebus.item.ItemTimeWand;
 import com.zhenzi233.timebus.tile.TileTimeGenerator;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraftforge.items.IItemHandler;
@@ -106,6 +112,11 @@ public class ContainerTimeGenerator extends AEBaseContainer implements IProgress
         heldCopy.setCount(1);
         final net.minecraftforge.fluids.capability.IFluidHandlerItem fh = net.minecraftforge.fluids.FluidUtil.getFluidHandler(heldCopy);
         if (fh == null) {
+            // The Time Wand is a storage cell rather than a fluid container; handle
+            // it through the AE2 cell API so it can bottle/pour Time Fluid too.
+            if (held.getItem() instanceof ItemTimeWand) {
+                handleWandAction(player, action, slot, held);
+            }
             return; // only items with a fluid handler can be filled/emptied
         }
 
@@ -141,6 +152,62 @@ public class ContainerTimeGenerator extends AEBaseContainer implements IProgress
             if (filled > 0) {
                 fh.drain(new net.minecraftforge.fluids.FluidStack(drainable.getFluid(), filled), true);
                 updateHeldContainer(player, fh.getContainer(), held);
+            }
+        }
+        this.updateHeld(player);
+    }
+
+    /**
+     * Fills/empties the held Time Wand through the AE2 cell API.
+     * FILL_ITEM: drain Time Fluid from the generator tank into the wand's cell.
+     * EMPTY_ITEM: extract Time Fluid from the wand's cell into the generator tank.
+     */
+    private void handleWandAction(final net.minecraft.entity.player.EntityPlayerMP player,
+                                  final appeng.helpers.InventoryAction action, final int slot,
+                                  final net.minecraft.item.ItemStack wand) {
+        final ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance().registries().cell()
+                .getCellInventory(wand, null,
+                        AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class));
+        if (cell == null) {
+            return;
+        }
+        final appeng.me.helpers.PlayerSource src = new appeng.me.helpers.PlayerSource(player, null);
+
+        if (action == appeng.helpers.InventoryAction.FILL_ITEM) {
+            final IAEFluidStack tankFluid = this.generator.getFluidInSlot(slot);
+            if (tankFluid == null) {
+                return;
+            }
+            // How much can the wand hold? Simulate inject first.
+            final IAEFluidStack probe = tankFluid.copy();
+            probe.setStackSize(1000);
+            final IAEFluidStack leftover = cell.injectItems(probe, Actionable.SIMULATE, src);
+            final long accepted = probe.getStackSize() - (leftover == null ? 0 : leftover.getStackSize());
+            if (accepted <= 0) {
+                return;
+            }
+            final net.minecraftforge.fluids.FluidStack drainRequest = tankFluid.setStackSize(accepted).getFluidStack();
+            final net.minecraftforge.fluids.FluidStack extracted = this.generator.drain(drainRequest, true);
+            if (extracted == null || extracted.amount <= 0) {
+                return;
+            }
+            final IAEFluidStack toStore = appeng.fluids.util.AEFluidStack.fromFluidStack(extracted);
+            cell.injectItems(toStore, Actionable.MODULATE, src);
+        } else if (action == appeng.helpers.InventoryAction.EMPTY_ITEM) {
+            final int capacity = this.generator.getTankProperties()[slot].getCapacity();
+            // Ask the wand for up to the tank's remaining space worth of Time Fluid.
+            final IAEFluidStack request = appeng.fluids.util.AEFluidStack.fromFluidStack(
+                    new net.minecraftforge.fluids.FluidStack(com.zhenzi233.timebus.fluid.TimeBusFluids.TIME_FLUID, capacity));
+            if (request == null) {
+                return;
+            }
+            final IAEFluidStack taken = cell.extractItems(request, Actionable.MODULATE, src);
+            if (taken == null || taken.getStackSize() <= 0) {
+                return;
+            }
+            final net.minecraftforge.fluids.FluidStack poured = taken.getFluidStack();
+            if (poured != null && poured.amount > 0) {
+                this.generator.fill(poured, true);
             }
         }
         this.updateHeld(player);
