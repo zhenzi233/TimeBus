@@ -3,6 +3,10 @@ package com.zhenzi233.timebus.item;
 import appeng.api.AEApi;
 import appeng.api.config.Actionable;
 import appeng.api.config.Upgrades;
+import appeng.api.networking.ticking.IGridTickable;
+import appeng.api.parts.IPart;
+import appeng.parts.automation.PartExportBus;
+import appeng.parts.automation.PartImportBus;
 import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.config.TimeBusConfig;
 import com.zhenzi233.timebus.util.AccelerateHelper;
@@ -109,7 +113,19 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             return EnumActionResult.PASS;
         }
         if (worldIn.isRemote) {
-            // Client side: render the particle burst locally. The 7-arg
+            // Client side: if we hit an ME Import/Export Bus, intercept so the
+            // bus GUI does not open (server will run the batch transfer).
+            final IPart hitPart = AEApi.instance().partHelper().getPart(worldIn, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
+            if (hitPart instanceof PartExportBus || hitPart instanceof PartImportBus) {
+                // Visual feedback for the batch transfer: same outward burst
+                // as block acceleration (server can't spawn the 7-arg particles).
+                final ItemStack held = player.getHeldItem(hand);
+                if (TimeBusFluids.TIME_FLUID != null) {
+                    spawnBurstParticles(worldIn, pos, getWandSpeed(held));
+                }
+                return EnumActionResult.SUCCESS;
+            }
+            // Otherwise render the particle burst locally. The 7-arg
             // World.spawnParticle overload only draws on the client, so the
             // burst must be spawned here, not from the server branch.
             final ItemStack held = player.getHeldItem(hand);
@@ -122,6 +138,14 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         if (TimeBusFluids.TIME_FLUID == null) {
             return EnumActionResult.FAIL;
         }
+
+        // Shift + right-click on an ME Import/Export Bus: batch transfer
+        // (consumes fluid + AE, runs the bus work wandBatchSize times).
+        final IPart hitPart = AEApi.instance().partHelper().getPart(worldIn, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
+        if (hitPart instanceof PartExportBus || hitPart instanceof PartImportBus) {
+            return handleBusBatch(worldIn, pos, facing, player, hand);
+        }
+
 
         // 1. Check AE energy (simulate first, commit only if everything is available).
         final double energyNeed = TimeBusConfig.wandEnergyCost;
@@ -151,6 +175,67 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         // 4. Accelerate the target block once. (Particles are rendered by the
         //    client branch of onItemUse.)
         AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack));
+        return EnumActionResult.SUCCESS;
+    }
+    /**
+     * Non-shift right-click on an ME Import/Export Bus: consume Time Fluid + AE
+     * and run the bus's tickingRequest N times (wandBatchSize), so one click
+     * transfers many batches at once. Client predicts by checking the part type.
+     */
+    private EnumActionResult handleBusBatch(final net.minecraft.world.World world, final BlockPos pos,
+                                            final net.minecraft.util.EnumFacing facing,
+                                            final EntityPlayer player, final EnumHand hand) {
+        final IPart part = AEApi.instance().partHelper().getPart(world, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
+        final boolean isBus = part instanceof PartExportBus || part instanceof PartImportBus;
+        if (!isBus) {
+            return EnumActionResult.PASS; // not a bus: let default behavior (open GUI etc.) run
+        }
+
+        if (world.isRemote) {
+            return EnumActionResult.SUCCESS; // intercept client-side so the bus GUI does not open
+        }
+
+        final ItemStack stack = player.getHeldItem(hand);
+        if (TimeBusFluids.TIME_FLUID == null) {
+            return EnumActionResult.FAIL;
+        }
+
+        // 1. Check AE energy (simulate first).
+        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
+            return EnumActionResult.FAIL;
+        }
+
+        // 2. Check Time Fluid in the wand's cell.
+        final appeng.api.storage.ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
+                .registries().cell()
+                .getCellInventory(stack, null,
+                        AEApi.instance().storage().getStorageChannel(appeng.api.storage.channels.IFluidStorageChannel.class));
+        if (cell == null) {
+            return EnumActionResult.FAIL;
+        }
+        final int fluidNeed = TimeBusConfig.wandFluidCost;
+        final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
+        final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
+        if (taken == null || taken.getStackSize() < fluidNeed) {
+            return EnumActionResult.FAIL;
+        }
+
+        // 3. Commit both costs.
+        this.extractAEPower(stack, energyNeed, Actionable.MODULATE);
+        cell.extractItems(request, Actionable.MODULATE, null);
+
+        // 4. Batch: run the bus work N times.
+        final int n = Math.max(1, TimeBusConfig.wandBatchSize);
+        final IGridTickable bus = (IGridTickable) part;
+        for (int i = 0; i < n; i++) {
+            try {
+                bus.tickingRequest(null, 1);
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: bus tickingRequest failed at {}: {}", pos, e.toString());
+                break;
+            }
+        }
         return EnumActionResult.SUCCESS;
     }
     /** END_ROD (+ occasional PORTAL) particles bursting outward from the block faces. */

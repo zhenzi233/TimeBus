@@ -152,6 +152,15 @@ public class TimeBusConfig {
     @RangeInt(min = 1, max = 1000000000)
     public static int wandEnergyCost = 1000;
 
+    @Name("Wand Bus Batch Size")
+    @Comment({
+        "How many transfer batches a right-click on an ME Import/Export Bus",
+        "performs (each batch moves up to the bus's normal per-tick amount,",
+        "scaled by its speed cards). Default: 16"
+    })
+    @RangeInt(min = 1, max = 1000000)
+    public static int wandBatchSize = 16;
+
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {
         @SubscribeEvent

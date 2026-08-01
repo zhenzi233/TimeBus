@@ -284,7 +284,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     }
                     used++;
                     TileEntity targetTE = world.getTileEntity(target);
-                    if (targetTE instanceof ITickable || targetTE instanceof appeng.tile.misc.TileCharger) {
+                    if (targetTE instanceof ITickable || targetTE instanceof appeng.tile.misc.TileCharger || targetTE instanceof appeng.tile.misc.TileInscriber || targetTE instanceof appeng.tile.crafting.TileMolecularAssembler || targetTE instanceof appeng.tile.misc.TileVibrationChamber || targetTE instanceof appeng.tile.storage.TileIOPort) {
                         workPhase = PHASE_TILE;
                         workPhaseRemaining = Math.max(0, speed - 1);
                         if (workPhaseRemaining == 0) {
@@ -297,7 +297,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 }
                 case PHASE_TILE: {
                     int n = Math.min(workPhaseRemaining, budget - used);
-                    n = com.zhenzi233.timebus.util.AccelerateHelper.runTileUpdates(world, target, n);
+                    n = com.zhenzi233.timebus.util.AccelerateHelper.runTileUpdates(world, target, n, speed);
                     used += n;
                     workPhaseRemaining -= n;
                     if (workPhaseRemaining <= 0) {

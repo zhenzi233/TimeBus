@@ -13,7 +13,7 @@ import net.minecraft.world.World;
  *
  * "Accelerating once" mirrors what the Time Bus does for one block:
  *   1. schedule one tick
- *   2. call ITickable.update() (speed-1) times 鈥?AE2 Chargers get their
+ *   2. call ITickable.update() (speed-1) times 闂?AE2 Chargers get their
  *      private doWork() invoked via a cached reflection handle instead
  *   3. call Block.updateTick() (speed * 20) times for randomly-ticking blocks
  *
@@ -40,7 +40,7 @@ public final class AccelerateHelper {
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: scheduleBlockUpdate failed at {}: {}", pos, e.toString());
         }
-        runTileUpdates(world, pos, Math.max(0, speed - 1));
+        runTileUpdates(world, pos, Math.max(0, speed - 1), speed);
         runRandomTicks(world, pos, state, block, speed * 20);
     }
 
@@ -51,7 +51,7 @@ public final class AccelerateHelper {
      *
      * @return how many calls actually ran
      */
-    public static int runTileUpdates(final World world, final BlockPos target, final int n) {
+    public static int runTileUpdates(final World world, final BlockPos target, final int n, final int speed) {
         if (n <= 0 || world == null || target == null) {
             return 0;
         }
@@ -85,10 +85,55 @@ public final class AccelerateHelper {
         // passing null is safe. One call = one tick of progress.
         if (targetTE instanceof appeng.tile.misc.TileInscriber) {
             try {
-                ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, 1);
+                // One call = `speed` ticks of progress (ticksSinceLastCall).
+                ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, Math.max(1, speed));
                 return 1;
             } catch (Exception e) {
                 TimeBus.LOGGER.warn("Time Bus: TileInscriber.tickingRequest failed at {}: {}", target, e.toString());
+                return 0;
+            }
+        }
+
+        // AE2 Molecular Assembler: grid-ticked (IGridTickable), not ITickable.
+        // tickingRequest(node, ticksSinceLastCall) advances progress by
+        // userPower(ticksSinceLastCall, ...); node is unused inside, so null is
+        // safe. One call = `speed` ticks of progress (only while it is awake,
+        // i.e. actively crafting with network power).
+        if (targetTE instanceof appeng.tile.crafting.TileMolecularAssembler) {
+            try {
+                ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, Math.max(1, speed));
+                return 1;
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: TileMolecularAssembler.tickingRequest failed at {}: {}", target, e.toString());
+                return 0;
+            }
+        }
+
+        // AE2 Vibration Chamber: grid-ticked generator (IGridTickable). Its
+        // tickingRequest burns fuel and injects timePassed*5 AE into the grid;
+        // timePassed scales with ticksSinceLastCall, so one call = `speed`
+        // ticks of burn time (only useful while the grid needs power; when the
+        // grid is full it slows itself down anyway).
+        if (targetTE instanceof appeng.tile.misc.TileVibrationChamber) {
+            try {
+                ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, Math.max(1, speed));
+                return 1;
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: TileVibrationChamber.tickingRequest failed at {}: {}", target, e.toString());
+                return 0;
+            }
+        }
+
+        // AE2 IO Port: grid-ticked (IGridTickable). tickingRequest ignores
+        // ticksSinceLastCall and just calls doWork() once, which moves up to
+        // 256 items (speed cards multiply it). Each call = one transfer batch,
+        // so acceleration = more calls per tick from the budget.
+        if (targetTE instanceof appeng.tile.storage.TileIOPort) {
+            try {
+                ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, 1);
+                return 1;
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: TileIOPort.tickingRequest failed at {}: {}", target, e.toString());
                 return 0;
             }
         }
