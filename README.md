@@ -1,5 +1,7 @@
 # Time Bus
 
+[English](README.md) | [中文](README_zh.md)
+
 An **Applied Energistics 2** addon for Minecraft 1.12.2 (CleanroomLoader) that adds a **time acceleration block** — the Time Bus speeds up blocks on its facing side.
 
 ## Features
