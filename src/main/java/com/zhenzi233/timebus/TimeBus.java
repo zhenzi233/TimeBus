@@ -89,6 +89,18 @@ public class TimeBus {
         Upgrades.REDSTONE.registerItem(timeBusDef, 1);
         Upgrades.FUZZY.registerItem(timeBusDef, 1);
 
+        // Register upgrades for the Time Wand item (Speed Cards only).
+        IItemDefinition wandDef = new IItemDefinition() {
+            @Override public String identifier() { return "time_wand"; }
+            @Override public java.util.Optional<net.minecraft.item.Item> maybeItem() { return java.util.Optional.of(com.zhenzi233.timebus.item.ItemTimeWand.ITEM); }
+            @Override public java.util.Optional<net.minecraft.item.ItemStack> maybeStack(int stackSize) { return java.util.Optional.of(new net.minecraft.item.ItemStack(com.zhenzi233.timebus.item.ItemTimeWand.ITEM, stackSize)); }
+            @Override public boolean isEnabled() { return true; }
+            @Override public boolean isSameAs(net.minecraft.item.ItemStack comparableStack) {
+                return !comparableStack.isEmpty() && comparableStack.getItem() == com.zhenzi233.timebus.item.ItemTimeWand.ITEM;
+            }
+        };
+        Upgrades.SPEED.registerItem(wandDef, 4);
+
         // Register AE2 part models
         AEApi.instance().registries().partModels().registerModels(
             new ResourceLocation(MOD_ID, "part/time_bus_base"),
