@@ -123,6 +123,35 @@ public class TimeBusConfig {
     @RangeDouble(min = 1.0, max = 1000000000.0)
     public static double timeFluidPerBatch = 1000.0;
 
+    // --- Time Wand ---
+
+    @Name("Wand Speed Multipliers")
+    @Comment({
+        "Per-card speed multipliers for the Time Wand, comma-separated.",
+        "Nth value = speed when N-1 speed cards are installed in the wand",
+        "(cards are placed via an AE2 cell workbench).",
+        "If more cards than values, the last value repeats.",
+        "Example: 2,4,8,16,32 -> 0 cards=2x, 1 card=4x, 2 cards=8x, 3 cards=16x, 4 cards=32x",
+        "This is independent from the Time Bus speedMultipliers."
+    })
+    public static String wandSpeedMultipliers = "2,4,8,16,32";
+
+    @Name("Wand Fluid Cost (mB)")
+    @Comment({
+        "Millibuckets of Time Fluid consumed per wand use (shift + right-click).",
+        "Default: 10"
+    })
+    @RangeInt(min = 1, max = 1000000)
+    public static int wandFluidCost = 10;
+
+    @Name("Wand Energy Cost (AE)")
+    @Comment({
+        "AE energy consumed per wand use (shift + right-click).",
+        "Default: 1000"
+    })
+    @RangeInt(min = 1, max = 1000000000)
+    public static int wandEnergyCost = 1000;
+
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {
         @SubscribeEvent

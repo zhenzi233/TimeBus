@@ -297,7 +297,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 }
                 case PHASE_TILE: {
                     int n = Math.min(workPhaseRemaining, budget - used);
-                    n = runTileUpdates(target, n);
+                    n = com.zhenzi233.timebus.util.AccelerateHelper.runTileUpdates(world, target, n);
                     used += n;
                     workPhaseRemaining -= n;
                     if (workPhaseRemaining <= 0) {
@@ -311,7 +311,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 }
                 case PHASE_RANDOM: {
                     int n = Math.min(workPhaseRemaining, budget - used);
-                    n = runRandomTicks(target, n, targetState, targetBlock, world);
+                    n = com.zhenzi233.timebus.util.AccelerateHelper.runRandomTicks(world, target, targetState, targetBlock, n);
                     used += n;
                     workPhaseRemaining -= n;
                     if (workPhaseRemaining <= 0) {
@@ -346,88 +346,6 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         workBlockIndex++;
         workPhase = PHASE_SCHEDULE;
         workPhaseRemaining = 0;
-    }
-
-    /**
-     * Run up to {@code n} acceleration calls on the target tile. ITickable tiles
-     * get update() calls; AE2 Chargers (grid-ticked, not ITickable) get doWork()
-     * calls directly (method exposed via timebus_at.cfg).
-     */
-    private int runTileUpdates(BlockPos target, int n) {
-        if (n <= 0) return 0;
-        net.minecraft.world.World world = getHost().getTile().getWorld();
-        TileEntity targetTE = world.getTileEntity(target);
-
-        if (targetTE instanceof appeng.tile.misc.TileCharger) {
-            final appeng.tile.misc.TileCharger charger = (appeng.tile.misc.TileCharger) targetTE;
-            // doWork() is private in TileCharger; invoke it via reflection at runtime.
-            // (An access transformer only changes runtime access, not compile-time
-            // visibility, so reflection is the portable way to call it.)
-            final java.lang.reflect.Method doWork = getChargerDoWork();
-            if (doWork == null) {
-                return 0;
-            }
-            int ran = 0;
-            for (int i = 0; i < n; i++) {
-                try {
-                    doWork.invoke(charger);
-                    ran++;
-                } catch (Exception e) {
-                    TimeBus.LOGGER.warn("Time Bus: TileCharger.doWork failed at {}: {}", target, e.toString());
-                    break;
-                }
-            }
-            return ran;
-        }
-
-        if (!(targetTE instanceof ITickable)) return 0;
-        ITickable tickable = (ITickable) targetTE;
-        int ran = 0;
-        for (int i = 0; i < n; i++) {
-            try {
-                tickable.update();
-                ran++;
-            } catch (Exception e) {
-                TimeBus.LOGGER.warn("Time Bus: ITickable.update failed at {}: {}", target, e.toString());
-                break;
-            }
-        }
-        return ran;
-    }
-
-    /** Cached reflection handle for TileCharger.doWork() (private in AE2). */
-    private static java.lang.reflect.Method chargerDoWork;
-
-    private static java.lang.reflect.Method getChargerDoWork() {
-        if (chargerDoWork == null) {
-            try {
-                chargerDoWork = appeng.tile.misc.TileCharger.class.getDeclaredMethod("doWork");
-                chargerDoWork.setAccessible(true);
-            } catch (NoSuchMethodException e) {
-                TimeBus.LOGGER.warn("Time Bus: could not find TileCharger.doWork: {}", e.toString());
-            }
-        }
-        return chargerDoWork;
-    }
-
-    /** Run up to {@code n} Block.updateTick calls; returns how many actually ran. */
-    private int runRandomTicks(BlockPos target, int n, IBlockState targetState, Block targetBlock, net.minecraft.world.World world) {
-        if (n <= 0 || !targetBlock.getTickRandomly()) return 0;
-        int ran = 0;
-        // Re-check the block state occasionally instead of every call.
-        for (int i = 0; i < n; i++) {
-            if (ran % 20 == 0 && world.getBlockState(target) != targetState) {
-                break;
-            }
-            try {
-                targetBlock.updateTick(world, target, targetState, world.rand);
-                ran++;
-            } catch (Exception e) {
-                TimeBus.LOGGER.warn("Time Bus: updateTick failed at {}: {}", target, e.toString());
-                break;
-            }
-        }
-        return ran;
     }
 
     // Budget usage info for the GUI.

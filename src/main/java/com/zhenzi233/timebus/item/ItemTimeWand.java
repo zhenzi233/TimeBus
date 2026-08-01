@@ -2,6 +2,14 @@ package com.zhenzi233.timebus.item;
 
 import appeng.api.AEApi;
 import appeng.api.config.Actionable;
+import appeng.api.config.Upgrades;
+import com.zhenzi233.timebus.TimeBus;
+import com.zhenzi233.timebus.config.TimeBusConfig;
+import com.zhenzi233.timebus.util.AccelerateHelper;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.EnumActionResult;
+import net.minecraft.util.EnumHand;
+import net.minecraft.util.math.BlockPos;
 import appeng.api.config.FuzzyMode;
 import appeng.api.implementations.items.IStorageCell;
 import appeng.api.storage.ICellInventory;
@@ -65,6 +73,77 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         AEApi.instance().client().addCellInformation(cdi, lines);
     }
 
+    // --- Right-click acceleration (shift + right-click) ---
+
+    /** Number of Speed Cards installed via the AE2 cell workbench. */
+    private int getCardCount(final ItemStack stack) {
+        final net.minecraftforge.items.IItemHandler upgrades = this.getUpgradesInventory(stack);
+        if (upgrades instanceof appeng.parts.automation.UpgradeInventory) {
+            return ((appeng.parts.automation.UpgradeInventory) upgrades).getInstalledUpgrades(Upgrades.SPEED);
+        }
+        return 0;
+    }
+
+    /** Effective speed from the wand's own configuration (independent of the Time Bus). */
+    private int getWandSpeed(final ItemStack stack) {
+        try {
+            final String[] parts = TimeBusConfig.wandSpeedMultipliers.split(",");
+            if (parts.length == 0) {
+                return 1;
+            }
+            final int idx = Math.min(getCardCount(stack), parts.length - 1);
+            return Math.max(1, Integer.parseInt(parts[idx].trim()));
+        } catch (NumberFormatException | NullPointerException e) {
+            TimeBus.LOGGER.warn("Invalid wandSpeedMultipliers config: '{}'", TimeBusConfig.wandSpeedMultipliers);
+            return 1;
+        }
+    }
+
+    @Override
+    public EnumActionResult onItemUse(final EntityPlayer player, final net.minecraft.world.World worldIn,
+                                      final BlockPos pos, final EnumHand hand, final net.minecraft.util.EnumFacing facing,
+                                      final float hitX, final float hitY, final float hitZ) {
+        // Shift + right-click accelerates the targeted block.
+        if (!player.isSneaking()) {
+            return EnumActionResult.PASS;
+        }
+        if (worldIn.isRemote) {
+            return EnumActionResult.SUCCESS; // server-side only
+        }
+        final ItemStack stack = player.getHeldItem(hand);
+        if (TimeBusFluids.TIME_FLUID == null) {
+            return EnumActionResult.FAIL;
+        }
+
+        // 1. Check AE energy (simulate first, commit only if everything is available).
+        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
+            return EnumActionResult.FAIL; // not enough AE power
+        }
+
+        // 2. Check Time Fluid in the wand's cell.
+        final appeng.api.storage.ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
+                .registries().cell()
+                .getCellInventory(stack, null,
+                        AEApi.instance().storage().getStorageChannel(appeng.api.storage.channels.IFluidStorageChannel.class));
+        if (cell == null) {
+            return EnumActionResult.FAIL;
+        }
+        final int fluidNeed = TimeBusConfig.wandFluidCost;
+        final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
+        final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
+        if (taken == null || taken.getStackSize() < fluidNeed) {
+            return EnumActionResult.FAIL; // not enough Time Fluid
+        }
+
+        // 3. Commit both costs.
+        this.extractAEPower(stack, energyNeed, Actionable.MODULATE);
+        cell.extractItems(request, Actionable.MODULATE, null);
+
+        // 4. Accelerate the target block once.
+        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack));
+        return EnumActionResult.SUCCESS;
+    }
     // --- IStorageCell ---
 
     @Override
