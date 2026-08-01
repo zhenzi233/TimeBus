@@ -20,9 +20,13 @@ public class BlockTimeFluid extends BlockFluidClassic {
 
     public static final int BUFF_DURATION_TICKS = 200; // 10 seconds
     public static final int BUFF_AMPLIFIER = 2;        // level III = amplifier 2
+    public static final int LIGHT_LEVEL = 15;          // full light, like lava/glowstone
 
     public BlockTimeFluid(Fluid fluid, Material material) {
         super(fluid, material);
+        // Time Fluid emits light (maxScaledLight scales with fluid density,
+        // full buckets reaching LIGHT_LEVEL).
+        this.setMaxScaledLight(LIGHT_LEVEL);
     }
 
     @Override
