@@ -12,8 +12,12 @@ gui.timebus.fluid_title=消耗流体: %1$s
 gui.timebus.fluid_rate=速率: %1$.1f mB/t
 gui.timebus.inventory=物品栏
 gui.timebus.generator.title=时间流体发生器
+gui.timebus.generator.mode=输入模式
+gui.timebus.generator.mode.matter_ball=物质球
+gui.timebus.generator.mode.singularity=奇点
 gui.timebus.generator.fluid=时间流体: %1$d/%2$d mB
 gui.timebus.generator.input=输入: 物质球或奇点
+gui.timebus.generator.progress=进度: %1$d/%2$d 当量
 gui.timebus.generator.balls=物质球: %1$d 个已投入
 gui.timebus.generator.singularities=奇点: %1$d 个已投入
 

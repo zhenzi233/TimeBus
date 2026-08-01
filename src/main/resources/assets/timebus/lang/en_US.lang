@@ -12,8 +12,12 @@ gui.timebus.fluid_title=Consuming: %1$s
 gui.timebus.fluid_rate=Rate: %1$.1f mB/t
 gui.timebus.inventory=Inventory
 gui.timebus.generator.title=Time Fluid Generator
+gui.timebus.generator.mode=Input Mode
+gui.timebus.generator.mode.matter_ball=Matter Balls
+gui.timebus.generator.mode.singularity=Singularity
 gui.timebus.generator.fluid=Time Fluid: %1$d/%2$d mB
 gui.timebus.generator.input=Input: Matter Ball or Singularity
+gui.timebus.generator.progress=Progress: %1$d/%2$d units
 gui.timebus.generator.balls=Matter Balls: %1$d fed
 gui.timebus.generator.singularities=Singularities: %1$d fed
 

@@ -1,16 +1,18 @@
 package com.zhenzi233.timebus.client.gui;
 
-import appeng.api.config.Settings;
+import appeng.api.storage.data.IAEFluidStack;
 import appeng.client.gui.AEBaseGui;
-import appeng.client.gui.widgets.GuiImgButton;
-import appeng.core.sync.network.NetworkHandler;
-import appeng.core.sync.packets.PacketConfigButton;
+import appeng.client.gui.widgets.GuiCustomSlot;
+import appeng.fluids.util.AEFluidStack;
+import appeng.fluids.util.IAEFluidTank;
+import com.zhenzi233.timebus.fluid.TimeBusFluids;
 import com.zhenzi233.timebus.tile.TileTimeGenerator;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.entity.player.InventoryPlayer;
-import net.minecraft.util.text.TextFormatting;
-import org.lwjgl.input.Mouse;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.capability.FluidTankProperties;
+import net.minecraftforge.fluids.capability.IFluidTankProperties;
 
 import java.io.IOException;
 
@@ -20,11 +22,13 @@ import java.io.IOException;
  * input slot at (51,52), storage component slot at (101,26), output-mode toggle button
  * at (128,52) that cycles Matter Balls / Singularity / Trash.
  * The progress bar is drawn manually (GuiProgressBar hardcodes the AE2 modid).
+ * A fluid tank at the output slot position (104,51) shows the stored Time Fluid and
+ * supports bottling/pouring with fluid containers.
  */
 public class GuiTimeGenerator extends AEBaseGui {
 
     private final ContainerTimeGenerator cvc;
-    private GuiImgButton mode;
+    private GuiTimeModeButton mode;
 
     public GuiTimeGenerator(final InventoryPlayer inventoryPlayer, final TileTimeGenerator te) {
         super(new ContainerTimeGenerator(inventoryPlayer, te));
@@ -32,14 +36,64 @@ public class GuiTimeGenerator extends AEBaseGui {
         this.ySize = 197;
     }
 
+    /**
+     * Tank data source backed by the container's @GuiSync fields, so the client
+     * shows the server-side fluid level even though the client tile is not ticked.
+     */
+    private IAEFluidTank getTankSource() {
+        return new IAEFluidTank() {
+            @Override
+            public IFluidTankProperties[] getTankProperties() {
+                return new IFluidTankProperties[]{new FluidTankProperties(
+                        storedStack(), (int) Math.max(0, GuiTimeGenerator.this.cvc.maxFluid), false, true)};
+            }
+
+            @Override
+            public int fill(FluidStack resource, boolean doFill) {
+                return 0;
+            }
+
+            @Override
+            public FluidStack drain(FluidStack resource, boolean doDrain) {
+                return null;
+            }
+
+            @Override
+            public FluidStack drain(int maxDrain, boolean doDrain) {
+                return null;
+            }
+
+            @Override
+            public void setFluidInSlot(int slot, IAEFluidStack fluid) {
+            }
+
+            @Override
+            public IAEFluidStack getFluidInSlot(int slot) {
+                FluidStack fs = storedStack();
+                return fs == null ? null : AEFluidStack.fromFluidStack(fs);
+            }
+
+            @Override
+            public int getSlots() {
+                return 1;
+            }
+
+            private FluidStack storedStack() {
+                if (TimeBusFluids.TIME_FLUID == null || GuiTimeGenerator.this.cvc.storedFluid <= 0) {
+                    return null;
+                }
+                return new FluidStack(TimeBusFluids.TIME_FLUID, (int) GuiTimeGenerator.this.cvc.storedFluid);
+            }
+        };
+    }
+
     @Override
     protected void actionPerformed(final GuiButton btn) throws IOException {
         super.actionPerformed(btn);
 
-        final boolean backwards = Mouse.isButtonDown(1);
-
         if (this.mode == btn) {
-            NetworkHandler.instance().sendToServer(new PacketConfigButton(Settings.CONDENSER_OUTPUT, backwards));
+            // Custom two-mode toggle: never cycles through TRASH (destroy) mode.
+            com.zhenzi233.timebus.TimeBus.NETWORK.sendToServer(new com.zhenzi233.timebus.network.PacketToggleOutput());
         }
     }
 
@@ -47,8 +101,30 @@ public class GuiTimeGenerator extends AEBaseGui {
     public void initGui() {
         super.initGui();
 
-        this.mode = new GuiImgButton(128 + this.guiLeft, 52 + this.guiTop, Settings.CONDENSER_OUTPUT, this.cvc.getOutput());
+        this.mode = new GuiTimeModeButton(this.cvc, 128 + this.guiLeft, 52 + this.guiTop);
         this.buttonList.add(this.mode);
+
+        // Hover zone over the progress bar (drawn in drawBG) so the mouse
+        // shows a tooltip with the current production progress.
+        this.buttonList.add(new GuiTimeProgressBar(this.cvc, 120 + this.guiLeft, 25 + this.guiTop));
+
+        // Fluid tank at the output slot position; clicking with a fluid container
+        // bottles (FILL_ITEM) or pours (EMPTY_ITEM) via the container.
+        this.guiSlots.add(new GuiTimeFluidTank(this.getTankSource(), 0, 0, 101, 49, 24, 24));
+    }
+
+    @Override
+    protected void mouseClicked(final int xCoord, final int yCoord, final int btn) throws IOException {
+        for (GuiCustomSlot slot : this.guiSlots) {
+            if (slot instanceof GuiTimeFluidTank) {
+                if (this.isPointInRegion(slot.xPos(), slot.yPos(), slot.getWidth(), slot.getHeight(), xCoord, yCoord)
+                        && slot.canClick(this.mc.player)) {
+                    slot.slotClicked(this.mc.player.inventory.getItemStack(), btn);
+                    return;
+                }
+            }
+        }
+        super.mouseClicked(xCoord, yCoord, btn);
     }
 
     @Override
@@ -56,22 +132,11 @@ public class GuiTimeGenerator extends AEBaseGui {
         this.fontRenderer.drawString(this.getGuiDisplayName(I18n.format("gui.timebus.generator.title")), 8, 6, 4210752);
         this.fontRenderer.drawString(I18n.format("gui.timebus.inventory"), 8, this.ySize - 96 + 3, 4210752);
 
-        // Sync the button with the server-side mode
-        this.mode.set(this.cvc.getOutput());
+        // The mode button reads the synced output itself; no per-frame set() needed.
 
-        // Fluid level (StoredEnergy-style text)
-        long stored = this.cvc.storedFluid;
-        long max = this.cvc.maxFluid;
-        String fluidText = TextFormatting.AQUA + I18n.format("gui.timebus.generator.fluid", stored, max);
-        this.fontRenderer.drawString(fluidText, 8, 46, 4210752);
-
-        // Batch progress lines
-        int balls = this.cvc.matterBallCount;
-        int singularities = this.cvc.singularityCount;
-        String ballText = TextFormatting.WHITE + I18n.format("gui.timebus.generator.balls", balls);
-        this.fontRenderer.drawString(ballText, 8, 60, 4210752);
-        String singText = TextFormatting.WHITE + I18n.format("gui.timebus.generator.singularities", singularities);
-        this.fontRenderer.drawString(singText, 8, 72, 4210752);
+        // Info text intentionally omitted: the fluid tank overlay shows the
+        // amount, the progress bar shows the batch progress, and the mode
+        // button shows the current input type.
     }
 
     @Override

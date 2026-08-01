@@ -37,12 +37,20 @@ public class TimeBus {
     @Mod.Instance(MOD_ID)
     public static TimeBus instance;
 
+    /** SimpleNetworkWrapper for mod-internal packets (e.g. generator mode toggle). */
+    public static net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper NETWORK;
+
     @SidedProxy(modId = MOD_ID, clientSide = "com.zhenzi233.timebus.proxy.ClientProxy", serverSide = "com.zhenzi233.timebus.proxy.CommonProxy")
     public static IProxy proxy;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         LOGGER.info("{} is loading...", MOD_NAME);
+
+        // Register the generator's two-mode toggle packet (server side only)
+        NETWORK = net.minecraftforge.fml.common.network.NetworkRegistry.INSTANCE.newSimpleChannel(MOD_ID);
+        NETWORK.registerMessage(com.zhenzi233.timebus.network.PacketToggleOutput.Handler.class,
+                com.zhenzi233.timebus.network.PacketToggleOutput.class, 0, net.minecraftforge.fml.relauncher.Side.SERVER);
 
         // Register external GUI for Time Bus
         GuiWrapper.INSTANCE.registerExternalGuiHandler(TimeBusGui.ID, new GuiWrapper.Opener() {

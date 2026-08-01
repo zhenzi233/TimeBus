@@ -37,7 +37,7 @@ import javax.annotation.Nullable;
  * 256 Singularities = 10000 mB by default). The storage component slot decides
  * the maximum fluid buffer.
  */
-public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFluidHandler, IConfigManagerHost, IConfigurableObject {
+public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appeng.fluids.util.IAEFluidTank, IConfigManagerHost, IConfigurableObject {
 
     public static final int BYTE_MULTIPLIER = 8;
 
@@ -52,9 +52,13 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
 
     private double storedFluid = 0;
 
-    // Batch counters (condenser-style: accumulate inputs, then produce)
-    private int matterBallCount = 0;
-    private int singularityCount = 0;
+    // Condenser-style progress in unified "units": 1 Matter Ball = 1 unit,
+    // 1 Singularity = singularityUnit (1000) units. Progress is preserved
+    // across mode switches because both inputs accumulate into this counter.
+    private double progressUnits = 0;
+    // Counters kept for GUI display of how many of each item were fed.
+    private long matterBallCount = 0;
+    private long singularityCount = 0;
 
     public TileTimeGenerator() {
         // Default mode: Matter Balls. GUI button cycles MATTER_BALLS -> SINGULARITY -> TRASH.
@@ -70,9 +74,10 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
     }
 
     /**
-     * Consume one input item per tick. Counters accumulate independently per item
-     * type; when enough have been fed in and there is room, Time Fluid is produced
-     * in one batch (exactly like the condenser waiting until requiredPower is met).
+     * Consume one input item per tick. Every accepted item adds its unit value to a
+     * single progress counter (1 Matter Ball = 1 unit, 1 Singularity = singularityUnit
+     * units), so progress survives switching the input mode. When the counter reaches
+     * unitsPerBatch and there is room, Time Fluid is produced in a full batch.
      * Only the input matching the current output mode is accepted.
      */
     private void processInput() {
@@ -83,36 +88,40 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
         double space = getStorage() - this.storedFluid;
         CondenserOutput mode = (CondenserOutput) this.cm.getSetting(Settings.CONDENSER_OUTPUT);
 
+        double unitValue;
         if (mode == CondenserOutput.MATTER_BALLS && isMatterBall(input)) {
-            if (space < TimeBusConfig.timePerMatterBallBatch) {
-                return; // no room for one full batch yet
-            }
-            ItemStack consumed = this.inputSlot.extractItem(0, 1, false);
-            if (consumed.isEmpty()) {
-                return;
-            }
-            this.matterBallCount++;
-            if (this.matterBallCount >= TimeBusConfig.matterBallsPerBatch) {
-                this.matterBallCount -= TimeBusConfig.matterBallsPerBatch;
-                this.storedFluid += TimeBusConfig.timePerMatterBallBatch;
-                this.markDirty();
-            }
+            unitValue = TimeBusConfig.matterBallUnit;
         } else if (mode == CondenserOutput.SINGULARITY && isSingularity(input)) {
-            if (space < TimeBusConfig.timePerSingularityBatch) {
-                return; // no room for one full batch yet
-            }
-            ItemStack consumed = this.inputSlot.extractItem(0, 1, false);
-            if (consumed.isEmpty()) {
-                return;
-            }
-            this.singularityCount++;
-            if (this.singularityCount >= TimeBusConfig.singularitiesPerBatch) {
-                this.singularityCount -= TimeBusConfig.singularitiesPerBatch;
-                this.storedFluid += TimeBusConfig.timePerSingularityBatch;
-                this.markDirty();
-            }
+            unitValue = TimeBusConfig.singularityUnit;
+        } else {
+            // TRASH mode (or mismatched input) consumes nothing - item stays in the slot.
+            return;
         }
-        // TRASH mode (or mismatched input) consumes nothing - item stays in the slot.
+
+        // No room for at least one full batch: keep the input in the slot.
+        if (space < TimeBusConfig.timeFluidPerBatch) {
+            return;
+        }
+
+        ItemStack consumed = this.inputSlot.extractItem(0, 1, false);
+        if (consumed.isEmpty()) {
+            return;
+        }
+
+        if (mode == CondenserOutput.MATTER_BALLS) {
+            this.matterBallCount++;
+        } else {
+            this.singularityCount++;
+        }
+        this.progressUnits += unitValue;
+
+        // Produce as many full batches as the accumulated units allow.
+        while (this.progressUnits >= TimeBusConfig.unitsPerBatch && space >= TimeBusConfig.timeFluidPerBatch) {
+            this.progressUnits -= TimeBusConfig.unitsPerBatch;
+            this.storedFluid += TimeBusConfig.timeFluidPerBatch;
+            space -= TimeBusConfig.timeFluidPerBatch;
+            this.markDirty();
+        }
     }
 
     private boolean isMatterBall(ItemStack is) {
@@ -128,6 +137,17 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
     /** Current output mode (for GUI display). */
     public CondenserOutput getOutput() {
         return (CondenserOutput) this.cm.getSetting(Settings.CONDENSER_OUTPUT);
+    }
+
+    /**
+     * Toggle between Matter Balls and Singularity input mode.
+     * Deliberately never enters TRASH (destroy) mode.
+     */
+    public void cycleOutput() {
+        CondenserOutput current = getOutput();
+        CondenserOutput next = current == CondenserOutput.MATTER_BALLS
+                ? CondenserOutput.SINGULARITY : CondenserOutput.MATTER_BALLS;
+        this.cm.putSetting(Settings.CONDENSER_OUTPUT, next);
     }
 
     /**
@@ -149,11 +169,21 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
         return this.storedFluid;
     }
 
-    public int getMatterBallCount() {
+    /** Progress in unified units (1 Matter Ball = 1, 1 Singularity = singularityUnit). */
+    public double getProgressUnits() {
+        return this.progressUnits;
+    }
+
+    /** Total units required for one batch. */
+    public double getUnitsPerBatch() {
+        return TimeBusConfig.unitsPerBatch;
+    }
+
+    public long getMatterBallCount() {
         return this.matterBallCount;
     }
 
-    public int getSingularityCount() {
+    public long getSingularityCount() {
         return this.singularityCount;
     }
 
@@ -177,6 +207,27 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
         return new IFluidTankProperties[]{
                 new FluidTankProperties(new FluidStack(TimeBusFluids.TIME_FLUID, (int) this.storedFluid), (int) getStorage(), false, true)
         };
+    }
+
+    // --- IAEFluidTank (GUI tank display) ---
+
+    @Override
+    public void setFluidInSlot(int slot, appeng.api.storage.data.IAEFluidStack fluid) {
+        // Output-only tank: no external writes.
+    }
+
+    @Override
+    public appeng.api.storage.data.IAEFluidStack getFluidInSlot(int slot) {
+        if (slot != 0 || TimeBusFluids.TIME_FLUID == null || this.storedFluid <= 0) {
+            return null;
+        }
+        return appeng.fluids.util.AEFluidStack.fromFluidStack(
+                new FluidStack(TimeBusFluids.TIME_FLUID, (int) this.storedFluid));
+    }
+
+    @Override
+    public int getSlots() {
+        return 1;
     }
 
     @Override
@@ -287,8 +338,9 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
         this.inputSlot.writeToNBT(data, "inputSlot");
         this.storageSlot.writeToNBT(data, "storageSlot");
         data.setDouble("storedFluid", this.storedFluid);
-        data.setInteger("matterBallCount", this.matterBallCount);
-        data.setInteger("singularityCount", this.singularityCount);
+        data.setDouble("progressUnits", this.progressUnits);
+        data.setLong("matterBallCount", this.matterBallCount);
+        data.setLong("singularityCount", this.singularityCount);
         return data;
     }
 
@@ -299,8 +351,9 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, IFlui
         this.inputSlot.readFromNBT(data, "inputSlot");
         this.storageSlot.readFromNBT(data, "storageSlot");
         this.storedFluid = data.getDouble("storedFluid");
-        this.matterBallCount = data.getInteger("matterBallCount");
-        this.singularityCount = data.getInteger("singularityCount");
+        this.progressUnits = data.getDouble("progressUnits");
+        this.matterBallCount = data.getLong("matterBallCount");
+        this.singularityCount = data.getLong("singularityCount");
     }
 
     // --- Capabilities ---

@@ -88,32 +88,40 @@ public class TimeBusConfig {
 
     // --- Time Fluid Generator ---
 
-    @Name("Matter Balls per Batch")
+    @Name("Matter Ball Unit Value")
     @Comment({
-        "How many Matter Balls must be fed in before one batch of Time Fluid is produced.",
-        "Mirrors the Matter Condenser: inputs accumulate until the required amount is met.",
-        "Default: 256"
+        "How many progress units one Matter Ball contributes.",
+        "Default: 1"
     })
     @RangeInt(min = 1, max = 1000000000)
-    public static int matterBallsPerBatch = 256;
+    public static int matterBallUnit = 1;
 
-    @Name("Time Fluid per Matter Ball Batch (mB)")
-    @Comment("How many millibuckets of Time Fluid one full Matter Ball batch produces. Default: 1")
-    @RangeDouble(min = 1.0, max = 1000000000.0)
-    public static double timePerMatterBallBatch = 1.0;
-
-    @Name("Singularities per Batch")
+    @Name("Singularity Unit Value")
     @Comment({
-        "How many Singularities must be fed in before one batch of Time Fluid is produced.",
-        "Default: 256"
+        "How many progress units one Singularity contributes.",
+        "A Singularity is worth 1000 Matter Balls, so progress is preserved",
+        "when the input mode is switched mid-way.",
+        "Default: 1000"
     })
     @RangeInt(min = 1, max = 1000000000)
-    public static int singularitiesPerBatch = 256;
+    public static int singularityUnit = 1000;
 
-    @Name("Time Fluid per Singularity Batch (mB)")
-    @Comment("How many millibuckets of Time Fluid one full Singularity batch produces. Default: 10000")
+    @Name("Units per Batch")
+    @Comment({
+        "Total progress units needed to produce one batch of Time Fluid.",
+        "64000 units = 64000 Matter Balls or 64 Singularities.",
+        "Default: 64000"
+    })
+    @RangeInt(min = 1, max = 1000000000)
+    public static int unitsPerBatch = 64000;
+
+    @Name("Time Fluid per Batch (mB)")
+    @Comment({
+        "How many millibuckets of Time Fluid one full batch produces.",
+        "Default: 1000"
+    })
     @RangeDouble(min = 1.0, max = 1000000000.0)
-    public static double timePerSingularityBatch = 10000.0;
+    public static double timeFluidPerBatch = 1000.0;
 
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {
