@@ -13,7 +13,7 @@ import net.minecraft.world.World;
  *
  * "Accelerating once" mirrors what the Time Bus does for one block:
  *   1. schedule one tick
- *   2. call ITickable.update() (speed-1) times — AE2 Chargers get their
+ *   2. call ITickable.update() (speed-1) times 鈥?AE2 Chargers get their
  *      private doWork() invoked via a cached reflection handle instead
  *   3. call Block.updateTick() (speed * 20) times for randomly-ticking blocks
  *
@@ -77,6 +77,20 @@ public final class AccelerateHelper {
                 }
             }
             return ran;
+        }
+
+        // AE2 Inscriber: grid-ticked (IGridTickable), not ITickable. Its public
+        // tickingRequest(node, ticksSinceLastCall) advances processingTime by
+        // ticksSinceLastCall each call; the node argument is unused inside, so
+        // passing null is safe. One call = one tick of progress.
+        if (targetTE instanceof appeng.tile.misc.TileInscriber) {
+            try {
+                ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, 1);
+                return 1;
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: TileInscriber.tickingRequest failed at {}: {}", target, e.toString());
+                return 0;
+            }
         }
 
         if (!(targetTE instanceof net.minecraft.util.ITickable)) {
