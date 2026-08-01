@@ -8,6 +8,7 @@ import com.zhenzi233.timebus.config.TimeBusConfig;
 import com.zhenzi233.timebus.util.AccelerateHelper;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumActionResult;
+import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import appeng.api.config.FuzzyMode;
@@ -108,7 +109,14 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             return EnumActionResult.PASS;
         }
         if (worldIn.isRemote) {
-            return EnumActionResult.SUCCESS; // server-side only
+            // Client side: render the particle burst locally. The 7-arg
+            // World.spawnParticle overload only draws on the client, so the
+            // burst must be spawned here, not from the server branch.
+            final ItemStack held = player.getHeldItem(hand);
+            if (TimeBusFluids.TIME_FLUID != null) {
+                spawnBurstParticles(worldIn, pos, getWandSpeed(held));
+            }
+            return EnumActionResult.SUCCESS;
         }
         final ItemStack stack = player.getHeldItem(hand);
         if (TimeBusFluids.TIME_FLUID == null) {
@@ -140,9 +148,45 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         this.extractAEPower(stack, energyNeed, Actionable.MODULATE);
         cell.extractItems(request, Actionable.MODULATE, null);
 
-        // 4. Accelerate the target block once.
+        // 4. Accelerate the target block once. (Particles are rendered by the
+        //    client branch of onItemUse.)
         AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack));
         return EnumActionResult.SUCCESS;
+    }
+    /** END_ROD (+ occasional PORTAL) particles bursting outward from the block faces. */
+    private void spawnBurstParticles(final net.minecraft.world.World world, final BlockPos pos, final int speed) {
+        final double cx = pos.getX() + 0.5;
+        final double cy = pos.getY() + 0.5;
+        final double cz = pos.getZ() + 0.5;
+        final int count = Math.min(24, 6 + speed);
+        for (int i = 0; i < count; i++) {
+            // Pick one of the six faces, spawn on it, and push outward
+            // along its normal (with a little jitter) so the burst is
+            // clearly visible around the block surface.
+            final int face = world.rand.nextInt(6);
+            double px = cx, py = cy, pz = cz;
+            double nx = 0, ny = 0, nz = 0;
+            final double jx = (world.rand.nextDouble() - 0.5) * 0.8;
+            final double jy = (world.rand.nextDouble() - 0.5) * 0.8;
+            final double jz = (world.rand.nextDouble() - 0.5) * 0.8;
+            switch (face) {
+                case 0: px = pos.getX() + 1.0; py = cy + jy; pz = cz + jz; nx = 1; break;
+                case 1: px = pos.getX();       py = cy + jy; pz = cz + jz; nx = -1; break;
+                case 2: py = pos.getY() + 1.0; px = cx + jx; pz = cz + jz; ny = 1; break;
+                case 3: py = pos.getY();       px = cx + jx; pz = cz + jz; ny = -1; break;
+                case 4: pz = pos.getZ() + 1.0; px = cx + jx; py = cy + jy; nz = 1; break;
+                default: pz = pos.getZ();      px = cx + jx; py = cy + jy; nz = -1; break;
+            }
+            final double f = 0.14 + world.rand.nextDouble() * 0.18;
+            final double vx = nx * f + (world.rand.nextDouble() - 0.5) * 0.2;
+            final double vy = ny * f + (world.rand.nextDouble() - 0.5) * 0.2;
+            final double vz = nz * f + (world.rand.nextDouble() - 0.5) * 0.2;
+            world.spawnParticle(EnumParticleTypes.END_ROD, px, py, pz, vx, vy, vz);
+            // Sprinkle in a few PORTAL particles for a stronger time effect.
+            if (i % 8 == 0) {
+                world.spawnParticle(EnumParticleTypes.PORTAL, px, py, pz, vx * 1.5, vy * 1.5, vz * 1.5);
+            }
+        }
     }
     // --- IStorageCell ---
 

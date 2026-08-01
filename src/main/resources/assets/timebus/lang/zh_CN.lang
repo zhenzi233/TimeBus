@@ -23,3 +23,40 @@ gui.timebus.generator.balls=物质球: %1$d 个已投入
 gui.timebus.generator.singularities=奇点: %1$d 个已投入
 
 key.categories.timebus=时间总线
+
+# --- 配置界面（Forge 配置 GUI 使用；缺失时回退到 @Name/@Comment 的英文） ---
+config.timebus.title=Time Bus 配置
+config.timebus.speedMultipliers=速度倍率
+config.timebus.speedMultipliers.tooltip=每张卡的加速倍率，逗号分隔。\n第 N 个值 = 安装 N-1 张卡时的速度。\n卡片多于数值时，最后一个值重复。\n示例：2,4,8,16,32 -> 0 张卡=2x，1 张卡=4x，2 张卡=8x，3 张卡=16x，4 张卡=32x
+config.timebus.idlePower=空闲功率消耗（AE/t）
+config.timebus.idlePower.tooltip=空闲时（无加速）每 tick 消耗的功率。默认：1.0
+config.timebus.powerPerSpeed=每速度单位功率消耗
+config.timebus.powerPerSpeed.tooltip=功率消耗倍率。总消耗 = max(idlePower, effectiveSpeed * powerPerSpeed)。默认：0.5
+config.timebus.fluidMode=启用流体消耗模式
+config.timebus.fluidMode.tooltip=若为 true，时间总线消耗 ME 网络中的流体来运作，而非 AE 能量。
+config.timebus.fluidName=消耗的流体
+config.timebus.fluidName.tooltip=要消耗的流体注册名（例如 'water'、'lava'）。默认：water
+config.timebus.fluidPerTick=每 tick 流体消耗（mB）
+config.timebus.fluidPerTick.tooltip=加速时每 tick 消耗的流体毫桶数。支持小数（如 0.1 = 每 10 tick 1 mB）。默认：1.0
+config.timebus.fluidConsumeMultiplier=流体消耗倍率（每张卡）
+config.timebus.fluidConsumeMultiplier.tooltip=每张加速卡将流体消耗乘以该值。实际速率 = fluidPerTick * (该值 ^ 卡数)。默认：2.0
+config.timebus.minFluid=最低流体量（mB）
+config.timebus.minFluid.tooltip=时间总线开始消耗前，ME 网络中所需的最低流体量。默认：1000（= 1 桶）
+config.timebus.capacityWidths=容量宽度
+config.timebus.capacityWidths.tooltip=每张卡的加速宽度，逗号分隔。\n第 N 个值 = 安装 N-1 张卡时的宽度（1 = 单方块）。\n卡片多于数值时，最后一个值重复。\n示例：1,3,9,15 -> 0 张卡=1，1 张卡=3，2 张卡=9，3 张卡=15
+config.timebus.maxCallsPerTick=每 tick 最大调用次数（工作预算）
+config.timebus.maxCallsPerTick.tooltip=每个服务端 tick 执行的最大加速调用次数（方块更新 + 随机 tick）。\n超出此预算的工作顺延到下一 tick，即使满速卡加宽范围也能保持服务端 tick 流畅。默认：128
+config.timebus.matterBallUnit=物质球单位值
+config.timebus.matterBallUnit.tooltip=一个物质球贡献的进度单位数。默认：1
+config.timebus.singularityUnit=奇点单位值
+config.timebus.singularityUnit.tooltip=一个奇点贡献的进度单位数。\n一个奇点价值 1000 个物质球，因此中途切换输入模式时进度得以保留。默认：1000
+config.timebus.unitsPerBatch=每批所需单位
+config.timebus.unitsPerBatch.tooltip=生产一批时间流体所需的总进度单位。\n64000 单位 = 64000 个物质球或 64 个奇点。默认：64000
+config.timebus.timeFluidPerBatch=每批时间流体量（mB）
+config.timebus.timeFluidPerBatch.tooltip=每完成一批生产的时间流体毫桶数。默认：1000
+config.timebus.wandSpeedMultipliers=时间杖速度倍率
+config.timebus.wandSpeedMultipliers.tooltip=时间杖每张卡的加速倍率，逗号分隔。\n第 N 个值 = 杖内安装 N-1 张加速卡时的速度（卡片通过 AE2 单元工作台放入）。\n卡片多于数值时，最后一个值重复。\n示例：2,4,8,16,32 -> 0 张卡=2x，1 张卡=4x，2 张卡=8x，3 张卡=16x，4 张卡=32x\n此配置独立于时间总线的 speedMultipliers。
+config.timebus.wandFluidCost=时间杖流体消耗（mB）
+config.timebus.wandFluidCost.tooltip=每次使用时间杖（潜行 + 右键）消耗的时间流体毫桶数。默认：10
+config.timebus.wandEnergyCost=时间杖能量消耗（AE）
+config.timebus.wandEnergyCost.tooltip=每次使用时间杖（潜行 + 右键）消耗的 AE 能量。默认：1000
