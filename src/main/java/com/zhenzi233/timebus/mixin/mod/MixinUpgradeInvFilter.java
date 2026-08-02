@@ -24,6 +24,7 @@ public abstract class MixinUpgradeInvFilter {
 
     @Inject(method = "allowInsert", at = @At("HEAD"), cancellable = true, remap = false)
     private void timebus$allowMachineParallelCard(IItemHandler inv, int slot, ItemStack itemstack, CallbackInfoReturnable<Boolean> cir) {
+        // TEMP DIAG
         if (itemstack != null && itemstack.getItem() instanceof ITimeBusUpgradeModule) {
             cir.setReturnValue(true);
         }

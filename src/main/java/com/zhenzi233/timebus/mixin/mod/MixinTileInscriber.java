@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -87,14 +87,36 @@ public abstract class MixinTileInscriber {
 
     /**
      * Let the 3-arg {@code getTask} accept stacked inputs: vanilla rejects
-     * {@code count > 1}. Same approach as RandomComplement's inscriber
-     * mixin. {@code method} must be the exact descriptor — matching by name
-     * would also hit the no-arg {@code getTask()}, which contains no
-     * {@code getCount()} call and silently voids the whole injection.
+     * {@code count > 1}. Swap the input argument for a count=1 copy at the
+     * method head (same effect as RandomComplement's getCount redirect, but
+     * without targeting any MC class — AE2 method names are identical at
+     * runtime, so no refmap method mapping is needed for released jars).
+     * {@code method} must be the exact descriptor; matching by name would
+     * also hit the no-arg {@code getTask()} and void the injection.
      */
-    @Redirect(method = "getTask(Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;)Lappeng/api/features/IInscriberRecipe;", at = @At(value = "INVOKE", target = "Lnet/minecraft/item/ItemStack;getCount()I", remap = false))
-    private static int timebus$getCount(ItemStack stack) {
-        return 1;
+    @Unique
+    private ItemStack timebus$toCountOne(ItemStack s) {
+        if (s == null || s.isEmpty()) {
+            return s;
+        }
+        ItemStack copy = s.copy();
+        copy.setCount(1);
+        return copy;
+    }
+
+    @ModifyVariable(method = "getTask(Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;)Lappeng/api/features/IInscriberRecipe;", at = @At("HEAD"), ordinal = 0, remap = false)
+    private ItemStack timebus$replaceInput(ItemStack input) {
+        return this.timebus$toCountOne(input);
+    }
+
+    @ModifyVariable(method = "getTask(Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;)Lappeng/api/features/IInscriberRecipe;", at = @At("HEAD"), ordinal = 1, remap = false)
+    private ItemStack timebus$replacePlateA(ItemStack plateA) {
+        return this.timebus$toCountOne(plateA);
+    }
+
+    @ModifyVariable(method = "getTask(Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;)Lappeng/api/features/IInscriberRecipe;", at = @At("HEAD"), ordinal = 2, remap = false)
+    private ItemStack timebus$replacePlateB(ItemStack plateB) {
+        return this.timebus$toCountOne(plateB);
     }
 
     /**
@@ -190,6 +212,7 @@ public abstract class MixinTileInscriber {
         if (this.timebus$batch < 0) {
             this.timebus$batch = this.timebus$computeBatch();
         }
+        // TEMP DIAG
         // Produce exactly as many as we consume (capped by every slot stock).
         stack.setCount(stack.getCount() * this.timebus$batch);
         return stack;

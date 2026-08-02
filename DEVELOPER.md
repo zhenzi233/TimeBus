@@ -172,6 +172,20 @@ src/main/java/com/zhenzi233/timebus/
 6. **设计稿源文件（psb/psd）不入库**：git add 前排除，只提交最终 png/png.mcmeta。
 7. **配方注册在 postInit**：压印机配方（`IInscriberRegistry`）与工作台配方（`GameRegistry`）都在 `TimeBus.postInit` 统一注册，物品必须先注册完成。
 
+### 6.6 正式 jar（混淆环境）Mixin 的坑（v1.0.1 发布修复实录）
+
+1. **`@Redirect` 到 MC 类方法在发布 jar 静默失效**：`ItemStack.getCount()` 运行时是 srg 名 `func_190916_E`，而发布 jar 的 refmap（Unimined remapJar 会重写成只有类名映射）没有方法映射 → 注入找不到。**避开 MC 类 target**：改用 `@ModifyVariable` 替换 AE2 方法参数（AE2 类方法名在 dev/jar 一致，无需映射）。
+2. **`@ModifyVariable` 要处理全部相关参数**：`getTask(input, plateA, plateB)` 三个参数都要换成 count=1 副本——只换 input 时，plate 堆叠会导致 `recipe.matches` 失败、压印机不工作。
+3. **注入"MC 方法的 override"时 method 名是 srg 名**：`SlotRestrictedInput.isItemValid`（override 了 MC `Slot.isItemValid`）运行时叫 `func_75214_a`——正式 jar 用 MCP 名找不到。解决：**双注入**（`isItemValid` + `func_75214_a`，`require=0` 让不匹配的那个静默跳过）。
+4. **mixin 调用目标类成员必须 `@Shadow`**（mixin 类不继承目标类，编译器不认识 `this.getXxx()`）；优先 `@Shadow` **方法**（public getter）而非私有字段。
+5. **`remap=false` 只对"AE2 自己的方法名"安全**（AE2 不混淆）；MC 类方法及其 override 必须处理 srg 名（双注入或 refmap）。
+6. **Unimined remapJar 会重写 refmap**（只保留类名映射）——不要依赖手写方法级 refmap 进发布 jar。
+7. **mixin annotation processor（apt）生成空 refmap**（Unimined 不提供映射数据）——apt 输出指到 scratch 目录（`-AoutRefMapFile=build/apt-refmap/...`），避免覆盖 src 里手写的 refmap。
+8. **运行时 javap 验证发布版 AE2**：用 `javap -p -cp <用户实际 AE2 jar>` 确认类/方法名（如 `ae2-uel-v0.56.8-novaeng_ver.jar`）——**发布版可能与开发源码不同**，务必以运行时 jar 为准。
+9. **诊断用 `System.out.println` + latest.log**：IDE 断点在 mixin 方法上不可靠；println 到日志最直接——一次运行区分"mixin 没应用" vs "注入点没被调" vs "条件不满足"。
+10. **同方法多注入**：`@Inject(method=...)` 多个 handler 共存没问题；`@Unique` 公共方法 + 多个 `@Inject`/`@ModifyVariable` 转发是复用逻辑的标准写法。
+11. **lang 文件名必须小写**（`en_us.lang` / `zh_cn.lang`）：Minecraft 的 `ResourceLocation` 强制路径小写（请求 `lang/en_us.lang`），而 jar（zip）大小写敏感——`en_US.lang`（大写）在发布 jar 里找不到 → 全部物品名显示原始 key（`item.timebus.xxx.name`）；dev 正常是因为 Windows 文件系统大小写不敏感。**这是 v1.0.1 物品名丢失的根因**。
+
 ## 7. 开发环境
 
 - CleanroomLoader `0.5.17-alpha`，Unimined `1.4.26-kappa`，Java 25 toolchain

@@ -1,0 +1,14 @@
+{
+  "mappings": {
+    "com/zhenzi233/timebus/mixin/mod/MixinSlotRestrictedInput": {
+      "appeng/container/slot/SlotRestrictedInput": "appeng/container/slot/SlotRestrictedInput"
+    },
+    "com/zhenzi233/timebus/mixin/mod/MixinUpgradeInvFilter": {
+      "appeng/parts/automation/UpgradeInventory$UpgradeInvFilter": "appeng/parts/automation/UpgradeInventory$UpgradeInvFilter"
+    },
+    "com/zhenzi233/timebus/mixin/mod/MixinTileInscriber": {
+      "getCount": "func_190916_E"
+    }
+  },
+  "data": {}
+}

@@ -31,7 +31,7 @@ public class TimeBus {
 
     public static final String MOD_ID = "timebus";
     public static final String MOD_NAME = "Time Bus";
-    public static final String VERSION = "1.0.1";
+    public static final String VERSION = "1.0.2";
 
     public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
 

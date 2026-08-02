@@ -99,6 +99,23 @@ dependencies {
         testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
+    // Mixin annotation processor: generates the full mcp->searge refmap
+    // (method-level mappings) that released jars need. Without it the refmap
+    // only contains class mappings and every @Inject/@Redirect/@ModifyArg
+    // target name (MCP) silently fails to match in the obfuscated runtime.
+    annotationProcessor "com.cleanroommc:sponge-mixin:0.20.13+mixin.0.8.7"
+}
+
+compileJava {
+    // The released jar ships a hand-maintained refmap
+    // (src/main/resources/timebus.mod.mixin-refmap.json) that maps the only
+    // MC-class target used by our mixins (ItemStack.getCount -> func_190916_E).
+    // AE2 targets need no mapping (AE2 is never obfuscated). The mixin
+    // annotation processor otherwise writes its own (class-only, mapping-less)
+    // refmap over our resources copy, so redirect its output into a scratch dir.
+    options.compilerArgs += [
+            "-AoutRefMapFile=${project.buildDir}/apt-refmap/timebus.mod.mixin-refmap.json"
+    ]
 }
 
 apply from: 'gradle/scripts/dependencies.gradle'
