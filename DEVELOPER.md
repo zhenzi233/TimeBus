@@ -117,34 +117,46 @@ src/main/java/com/zhenzi233/timebus/
 
 配置界面已本地化（`config.timebus.*` lang keys，中英双语）。
 
-## 6. 机器并行卡（Machine Parallel Card）与 Mixin 机制
+## 6. 机器并行卡（Machine Parallel Card）与压印机堆叠支持
 
 ### 6.1 功能
 
-机器并行卡（`ItemMachineParallelCard`，注册名 `machine_parallel_card`）目前只作用于 **AE2 压印机（Inscriber）**：升级槽中每放入 1 张并行卡，压印机每次完成压印时**额外消耗 1 份材料、额外产出 1 份产品**（N 张卡 → 消耗/产出 (N+1) 份）。耗电按 (N+1) 倍，印模（上/下槽）**不消耗**。
+机器并行卡（`ItemMachineParallelCard`，注册名 `machine_parallel_card`）作用于 **AE2 压印机（Inscriber）**：
 
-- 0 张卡：完全走原版（或 RandomComplement）逻辑，mixin 不接管
-- 输入槽 maxStack 提升到 64（原版输出槽已是 64，只需提升输入槽）
-- 无 RandomComplement 时手动放堆叠材料；有 RandomComplement 时其堆叠/自动输入输出照常工作，TimeBus 只叠加并行批次（"使用它的方法，我们只做并行"）
+- **三个槽都支持堆叠**：上印模槽、下印模槽、材料输入槽的 maxStack 全部提升到 64（原版都是 1）
+- **无并行卡**：堆叠材料可被原版逻辑连续处理——每次完成**三槽各消耗 1 个、产出 1 份**；配方无效时压印机不 tick、进度条不空转
+- **有并行卡**：升级槽中每 1 张卡 → 每次完成**三槽各多消耗 1 个、额外产出 1 份**（N 张卡 → 每槽消耗 (N+1) 份、产出 (N+1) 份），**批次受三槽中最少者限制**；工作流程（进度条、冲压动画、耗电）与原版**完全一致**，只改完成时的消耗/产出
+- 卡片是普通物品（不实现 `IUpgradeModule`），通过 mixin 放行进升级槽
 
 ### 6.2 实现（Mixin 混入 AE2）
 
-`mixin/mod/MixinTileInscriber.java` 混入 `appeng.tile.misc.TileInscriber`：
+`mixin/mod/MixinTileInscriber.java` 混入 `appeng.tile.misc.TileInscriber`，共 5 个注入点：
 
-- `@Inject(tickingRequest HEAD, cancellable)`：有并行卡时接管，每 tick 完成一批 (N+1) 份的压印（配方用 **count=1 副本**调 private `getTask` 绕过单物品限制，输出先模拟插入防丢物品，消耗 N+1 份材料）
-- `@Inject(<init> TAIL)`：`sideItemHandler.setMaxStackSize(0, 64)` 提升输入槽容量
-- `@Invoker(gen.Invoker)`：暴露 private 三参 `getTask`
+1. `@Inject(<init> TAIL)`：`topItemHandler / bottomItemHandler / sideItemHandler` 三个槽 `setMaxStackSize(0, 64)`
+2. `@Redirect(getTask 三参精确描述符)`：`getTask` 内所有 `ItemStack.getCount()` 调用返回 1（绕过原版 `count > 1` 单物品限制，RandomComplement 同款思路）——这是"无卡堆叠也能处理"的关键
+3. `@Inject(hasWork HEAD, cancellable)`：输入非空**且配方有效**时返回 true——原版 `hasWork()` 会因堆叠输入返回 false，导致 AE2 网格调度器让压印机 sleep、`tickingRequest` 不再被调；同时必须检查配方有效，否则无效配方也会保持 tick 空转进度
+4. `@ModifyArg(tickingRequest setStackInSlot ordinal 0/1/2)`：原版完成阶段用 `setStackInSlot(0, ItemStack.EMPTY)` **清空整个槽**（假设只有 1 个物品），绕过 count 限制后会把整个堆叠吞掉只产 1 个——改为**消耗 batch 个、剩余保留**（top / bottom / side 三处，保持原版 PRESS/INScribe 的条件语义）
+5. `@ModifyArg(tickingRequest insertItem ordinal 0/1)`：产出 ×batch（smash 完成实际插入 + 输出槽预检模拟两处）
+6. **batch 缓存**：`@Unique timebus$batch` 字段 + `@Inject(tickingRequest HEAD)` 每 tick 重置；`scaleOutput`（完成序列最先执行，此时三槽未扣）一次性计算 `batch = min(N+1, 三槽数量, 空槽跳过)`，三个 consume handler **复用缓存**——绝不能在每个 handler 里重算（前一个 handler 消耗后，后续算出的 batch 会变 → 消耗量错乱）
 
-`mixin/mod/MixinUpgradeInvFilter.java` 混入 `UpgradeInventory$UpgradeInvFilter`，`allowInsert` 放行机器并行卡（卡片是普通物品，不实现 `IUpgradeModule`，靠这个 mixin 进升级槽）。
+`mixin/mod/MixinUpgradeInvFilter.java` 混入 `appeng/parts/automation/UpgradeInventory$UpgradeInvFilter`，`@Inject(allowInsert HEAD, cancellable)` 放行 `ItemMachineParallelCard`（`AppEngInternalInventory.insertItem / isItemValidForSlot` 都走 `filter.allowInsert`）。
 
-### 6.3 Cleanroom 混入 mod 类（AE2）的坑（重要）
+### 6.3 Cleanroom 混入 mod 类（AE2）的坑（重要，踩过一遍）
 
-1. **用 `@env(MOD)` 配置 + jar manifest `MixinConfigs`**（dev 环境是 `-Dcrl.dev.mixin`）。`ILateMixinLoader` 已废弃（Cleanroom fork 了 Mixin），别用它；也不要混入 `@env(DEFAULT)` 配置（早期阶段看不到 mod 类，会让 AE2 加载时 `ClassNotFound`）
-2. **`@Shadow` 只认目标类自身声明的方法/字段**——继承方法（如 `getProxy`、`extractAEPower`、`saveChanges`、`markForUpdate`）不要 `@Shadow`，用 `((TileInscriber)(Object)this)` 强转调用
-3. **`@Invoker` 用 `org.spongepowered.asm.mixin.gen.Invoker`**（sponge-mixin 移除了 `injection.Invoker`）
-4. **构造 `@Redirect` 非法**（sponge-mixin 0.8.7 禁止），构造相关改动用 `@Inject(<init> TAIL)`
-5. **`remap = false`**：AE2 是外部 mod，方法名是 MCP 名且不在 MC 映射 refmap 里
-6. **mixin 配置的 plugin 类必须在自己配置的包下**（跨配置引用 = 包归属违规 → `required:true` 时直接崩）——本 mod 的 mod 配置已去掉 plugin
+1. **用 `@env(MOD)` 配置 + jar manifest `MixinConfigs`**。`ILateMixinLoader` 已废弃（Cleanroom fork 了 Mixin），别用；也别把 mod 类放进 `@env(DEFAULT)` 配置（早期阶段看不到 mod 类，会让 AE2 加载时 `ClassNotFound`）
+2. **dev 模式加载靠 `-Dcrl.dev.mixin`**：IDE 运行配置（`runConfigurations/+runClient.xml`）的 VM 参数必须带 `-Dcrl.dev.mixin=timebus.default.mixin.json,timebus.mod.mixin.json`，否则 mixin **静默不加载**（不崩、不生效、断点全不触发）；发布 jar 走 manifest 不需要它
+3. **`@Redirect` 的 `method` 必须写精确描述符**：`method = "getTask"` 会匹配无参 + 三参两个 overload，无参 `getTask()` 体内没有 `getCount()` 调用，导致注入静默失效（三参的也不生效）——要写 `"getTask(Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemStack;)Lappeng/api/features/IInscriberRecipe;"`
+4. **`@At` 的 target 要显式 `remap = false`**（AE2 是外部 mod，方法名是 MCP 名，不在 MC 映射 refmap 里；直接 mcp 名匹配 dev 字节码）
+5. **`@Shadow` 只认目标类自身声明的方法/字段**——继承方法（`getProxy`、`extractAEPower`、`saveChanges`、`markForUpdate`）不要 `@Shadow`，用 `((TileInscriber)(Object)this)` 强转调用
+6. **`@Invoker` 用 `org.spongepowered.asm.mixin.gen.Invoker`**（sponge-mixin 移除了 `injection.Invoker`）；构造 `@Redirect` 非法（0.8.7 禁止），构造改动用 `@Inject(<init> TAIL)`
+7. **AE2 网格调度靠 `hasWork()` 决定是否 tick**：原版 `hasWork()` 内部用无参 `getTask()`（受 count>1 限制）——堆叠输入时返回 false → 压印机 sleep 不处理。注入 `hasWork` 且**必须校验配方有效**（无条件 true 会让无效配方也空转进度条）
+8. **原版完成逻辑清空整个输入槽**：`setStackInSlot(0, ItemStack.EMPTY)` 假设槽里只有 1 个物品——绕过 count 限制后必须用 `@ModifyArg`（按 ordinal 定位 top/bottom/side 三处）改为"消耗 1 个、剩余保留"，否则堆叠材料被一次吞光只产 1 个
+9. **IDE 断点在 mixin 方法上不生效**：mixin 运行时把注入方法重命名（日志里可见 `handler$zzb000$main$timebus$xxx`）且行号表偏移——用 `System.out.println` 日志验证执行，不要依赖断点
+10. **mixin 配置的 plugin 类必须在自己配置的包下**（跨配置引用 = 包归属违规 → `required:true` 时直接崩）——本 mod 的 mod 配置已去掉 plugin
+11. **`@Inject` 注入到非 void 方法，handler 必须用 `CallbackInfoReturnable<T>`**（即使不 cancellable）——用 `CallbackInfo` 会 `InvalidInjectionException: CallbackInfoReturnable is required` → **mixin 应用失败 → 目标类加载失败 → 宿主 mod（AE2）`NoClassDefFoundError` 崩溃**（AE2 自己 preInit 引用 TileInscriber 时爆）
+12. **多个 `@ModifyArg` 共享的派生值必须缓存**：batch（批次大小）在完成开始时算一次（`@Unique` 字段 + `@Inject(HEAD)` 每 tick 重置），**不要在**每个 handler 里重算——前面的 handler 消耗槽位后，后续 handler 算出的 batch 会变（空槽被跳过、数量变小），导致消耗量错乱（日志曾见 `bottom=-1` 后 batch 从 1 膨胀到 3，中间槽多扣）
+13. **附属功能优先"叠加"而非"接管"**：改原版逻辑尽量只动"完成点"（`@ModifyArg` 改参数），不要整体接管 `tickingRequest`——接管会破坏原版进度条/冲压动画/耗电语义，且"1 tick 一批"太快无法观察；正确姿势是"工作流程跟原版一致，只有消耗原料和产出有变动"
+14. **PowerShell 写含 `$` 的代码会被吞变量**：`timebus$batch` 在双引号 here-string 里变成 `timebus`（`$batch` 被当变量替换为空）→ 字段/方法名损坏 → 编译报"找不到符号"——写含 `$` 的 Java 代码用 File 工具直接写，或 PowerShell 单引号字符串（不转义 `$`），写完必须验证
 
 ### 6.4 创造 Tab
 
@@ -160,5 +172,13 @@ src/main/java/com/zhenzi233/timebus/
 ### 常见坑
 
 - `srg2mcp.jar` 损坏导致 `remapJar` 失败：删 `F:\AiWork\TimeBus\.gradle\unimined\local\mappings\srg2mcp.jar` 重建
-- PowerShell 写中文文件会乱码：用 `[System.IO.File]::WriteAllText(path, content, UTF8Encoding($false))` 或直接让工具写文件
 - 服务端不能用 7 参 `spawnParticle`：粒子一律走客户端分支
+
+### 常见坑：更新文档/写中文文件的工具坑（亲身踩过）
+
+- **不要用 PowerShell 写含中文的内容**（尤其 Markdown）：PowerShell 5.1 解析 `.ps1` 脚本时按系统编码（GBK）读脚本文件，**脚本里的中文字符串在内存里已经是乱码**——即使 `WriteAllText` 指定了 UTF-8 写出，写出来的还是乱码（`鏈哄櫒` 这类），而且**直接覆盖原文件、没有备份**。**写中文一律用工具（File edit/write）直接操作文件**，工具写 UTF-8 是安全的
+- **读文件要显式指定 UTF-8**：`[System.IO.File]::ReadAllText(path, [System.Text.Encoding]::UTF8)`——PowerShell 默认按 GBK 读无 BOM 的 UTF-8 文件，中文 `IndexOf`/`Select-String` 会匹配失败（marker 找不到）
+- **区分"控制台显示乱码"和"文件真乱码"**：`Get-Content`/`Select-String` 按 GBK 解码 UTF-8 文件时显示乱码，但**文件本身可能是好的**——判断是否真乱码，必须用 UTF-8 显式读取再打印
+- **文档写坏后从 git 恢复**：`git checkout -- <file>`（git 里有干净版本时）——改文档前先确认 git 状态，写坏可一键还原
+- **多行 PowerShell 命令会被工具安全拦截**：复杂逻辑（here-string、循环、条件）写成 `.ps1` 文件再 `powershell -ExecutionPolicy Bypass -File xxx.ps1` 执行，用完删除
+- **File 工具的 `edit` 对含花括号的大段 Java 代码可能误报 "unbalanced braces"**：改用 `File patch`（unified diff）或 PowerShell 单行精确 `Replace`（注意行尾符：文件是 LF 还是 CRLF，替换串要一致）

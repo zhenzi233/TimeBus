@@ -6,6 +6,7 @@
     "client": [],
     "mixins": [
         "MixinUpgradeInvFilter",
+        "MixinSlotRestrictedInput",
         "MixinTileInscriber"
     ],
     "server": [],

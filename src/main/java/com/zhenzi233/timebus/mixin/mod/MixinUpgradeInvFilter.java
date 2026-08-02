@@ -1,6 +1,6 @@
 package com.zhenzi233.timebus.mixin.mod;
 
-import com.zhenzi233.timebus.item.ItemMachineParallelCard;
+import com.zhenzi233.timebus.item.ITimeBusUpgradeModule;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.items.IItemHandler;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,7 +24,7 @@ public abstract class MixinUpgradeInvFilter {
 
     @Inject(method = "allowInsert", at = @At("HEAD"), cancellable = true, remap = false)
     private void timebus$allowMachineParallelCard(IItemHandler inv, int slot, ItemStack itemstack, CallbackInfoReturnable<Boolean> cir) {
-        if (itemstack != null && itemstack.getItem() instanceof ItemMachineParallelCard) {
+        if (itemstack != null && itemstack.getItem() instanceof ITimeBusUpgradeModule) {
             cir.setReturnValue(true);
         }
     }
