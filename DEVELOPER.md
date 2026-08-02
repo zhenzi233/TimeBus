@@ -15,7 +15,12 @@ src/main/java/com/zhenzi233/timebus/
 │   ├── ItemTimeBus.java    # part 物品（挂在线缆上的方块）
 │   └── PartTimeBus.java    # 核心加速方块：预算状态机 + 调度
 ├── item/
-│   └── ItemTimeWand.java   # 时间杖：存储单元 + 右键加速/总线批量
+│   ├── ItemTimeWand.java   # 时间杖：存储单元 + 右键加速/总线批量
+│   ├── ItemMachineParallelCard.java  # 机器并行卡（压印机并行，见 §6）
+│   └── TimeBusCreativeTab.java       # 本 mod 创造 Tab（itemGroup.timebus）
+├── mixin/mod/              # 混入 AE2 类的 Mixin（见 §6.3 的坑）
+│   ├── MixinUpgradeInvFilter.java    # 升级槽放行机器并行卡
+│   └── MixinTileInscriber.java       # 压印机并行逻辑（N+1 消耗/产出）
 ├── util/AccelerateHelper.java  # 加速引擎（唯一加速逻辑归属）
 ├── tile/                   # 时间流体发生器（方块实体 + 容器 + GUI）
 ├── client/gui/             # 发生器 GUI / 时间总线 GUI
@@ -112,7 +117,40 @@ src/main/java/com/zhenzi233/timebus/
 
 配置界面已本地化（`config.timebus.*` lang keys，中英双语）。
 
-## 6. 开发环境
+## 6. 机器并行卡（Machine Parallel Card）与 Mixin 机制
+
+### 6.1 功能
+
+机器并行卡（`ItemMachineParallelCard`，注册名 `machine_parallel_card`）目前只作用于 **AE2 压印机（Inscriber）**：升级槽中每放入 1 张并行卡，压印机每次完成压印时**额外消耗 1 份材料、额外产出 1 份产品**（N 张卡 → 消耗/产出 (N+1) 份）。耗电按 (N+1) 倍，印模（上/下槽）**不消耗**。
+
+- 0 张卡：完全走原版（或 RandomComplement）逻辑，mixin 不接管
+- 输入槽 maxStack 提升到 64（原版输出槽已是 64，只需提升输入槽）
+- 无 RandomComplement 时手动放堆叠材料；有 RandomComplement 时其堆叠/自动输入输出照常工作，TimeBus 只叠加并行批次（"使用它的方法，我们只做并行"）
+
+### 6.2 实现（Mixin 混入 AE2）
+
+`mixin/mod/MixinTileInscriber.java` 混入 `appeng.tile.misc.TileInscriber`：
+
+- `@Inject(tickingRequest HEAD, cancellable)`：有并行卡时接管，每 tick 完成一批 (N+1) 份的压印（配方用 **count=1 副本**调 private `getTask` 绕过单物品限制，输出先模拟插入防丢物品，消耗 N+1 份材料）
+- `@Inject(<init> TAIL)`：`sideItemHandler.setMaxStackSize(0, 64)` 提升输入槽容量
+- `@Invoker(gen.Invoker)`：暴露 private 三参 `getTask`
+
+`mixin/mod/MixinUpgradeInvFilter.java` 混入 `UpgradeInventory$UpgradeInvFilter`，`allowInsert` 放行机器并行卡（卡片是普通物品，不实现 `IUpgradeModule`，靠这个 mixin 进升级槽）。
+
+### 6.3 Cleanroom 混入 mod 类（AE2）的坑（重要）
+
+1. **用 `@env(MOD)` 配置 + jar manifest `MixinConfigs`**（dev 环境是 `-Dcrl.dev.mixin`）。`ILateMixinLoader` 已废弃（Cleanroom fork 了 Mixin），别用它；也不要混入 `@env(DEFAULT)` 配置（早期阶段看不到 mod 类，会让 AE2 加载时 `ClassNotFound`）
+2. **`@Shadow` 只认目标类自身声明的方法/字段**——继承方法（如 `getProxy`、`extractAEPower`、`saveChanges`、`markForUpdate`）不要 `@Shadow`，用 `((TileInscriber)(Object)this)` 强转调用
+3. **`@Invoker` 用 `org.spongepowered.asm.mixin.gen.Invoker`**（sponge-mixin 移除了 `injection.Invoker`）
+4. **构造 `@Redirect` 非法**（sponge-mixin 0.8.7 禁止），构造相关改动用 `@Inject(<init> TAIL)`
+5. **`remap = false`**：AE2 是外部 mod，方法名是 MCP 名且不在 MC 映射 refmap 里
+6. **mixin 配置的 plugin 类必须在自己配置的包下**（跨配置引用 = 包归属违规 → `required:true` 时直接崩）——本 mod 的 mod 配置已去掉 plugin
+
+### 6.4 创造 Tab
+
+`item/TimeBusCreativeTab.java`：本 mod 所有物品（Time Bus、Debug Wand、Time Wand、Machine Parallel Card、Time Fluid Generator）统一归入 `itemGroup.timebus` 标签页（中英双语 lang key：`itemGroup.timebus`）。
+
+## 7. 开发环境
 
 - CleanroomLoader `0.5.17-alpha`，Unimined `1.4.26-kappa`，Java 25 toolchain
 - 构建：`gradlew build`（产物在 `build/libs/timebus-1.0.0.jar`）

@@ -1,6 +1,7 @@
 package com.zhenzi233.timebus.proxy;
 
 import com.zhenzi233.timebus.item.ItemDebugWand;
+import com.zhenzi233.timebus.item.ItemMachineParallelCard;
 import com.zhenzi233.timebus.item.ItemTimeWand;
 import com.zhenzi233.timebus.part.ItemTimeBus;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
@@ -20,6 +21,9 @@ public class CommonProxy implements IProxy {
 
         ItemTimeWand.ITEM = new ItemTimeWand();
         GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemTimeWand.ITEM);
+
+        ItemMachineParallelCard.ITEM = new ItemMachineParallelCard();
+        GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemMachineParallelCard.ITEM);
     }
 
     @Override

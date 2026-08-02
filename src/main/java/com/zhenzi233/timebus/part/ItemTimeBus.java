@@ -3,7 +3,7 @@ package com.zhenzi233.timebus.part;
 import appeng.api.AEApi;
 import appeng.api.parts.IPartItem;
 import com.zhenzi233.timebus.TimeBus;
-import net.minecraft.creativetab.CreativeTabs;
+import com.zhenzi233.timebus.item.TimeBusCreativeTab;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -20,7 +20,7 @@ public class ItemTimeBus extends Item implements IPartItem<PartTimeBus> {
     public static ItemTimeBus ITEM;
 
     public ItemTimeBus() {
-        this.setCreativeTab(CreativeTabs.REDSTONE);
+        this.setCreativeTab(TimeBusCreativeTab.INSTANCE);
         this.setRegistryName(TimeBus.MOD_ID, "time_bus");
         this.setTranslationKey(TimeBus.MOD_ID + ".time_bus");
     }

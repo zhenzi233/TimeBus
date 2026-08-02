@@ -1,6 +1,7 @@
 package com.zhenzi233.timebus.proxy;
 
 import com.zhenzi233.timebus.item.ItemDebugWand;
+import com.zhenzi233.timebus.item.ItemMachineParallelCard;
 import com.zhenzi233.timebus.item.ItemTimeWand;
 import com.zhenzi233.timebus.part.ItemTimeBus;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
@@ -23,11 +24,15 @@ public class ClientProxy implements IProxy {
         ItemTimeWand.ITEM = new ItemTimeWand();
         GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemTimeWand.ITEM);
 
+        ItemMachineParallelCard.ITEM = new ItemMachineParallelCard();
+        GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemMachineParallelCard.ITEM);
+
         // Register item models in preInit. In 1.12.2 the model registry is baked before
         // init, so models must be registered here or the items render black/purple.
         registerItemModel(ItemTimeBus.ITEM, 0, "time_bus");
         registerItemModel(ItemDebugWand.ITEM, 0, "debug_wand");
         registerItemModel(ItemTimeWand.ITEM, 0, "time_wand");
+        registerItemModel(ItemMachineParallelCard.ITEM, 0, "machine_parallel_card");
         // The generator's ItemBlock shares the block's registry name.
         Item generatorItem = Item.getByNameOrId("timebus:time_generator");
         if (generatorItem != null) {

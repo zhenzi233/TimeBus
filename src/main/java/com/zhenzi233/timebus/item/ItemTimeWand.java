@@ -60,6 +60,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
     public ItemTimeWand() {
         super(AEConfig.instance().getMatterCannonBattery());
+        this.setCreativeTab(TimeBusCreativeTab.INSTANCE);
         this.setRegistryName("timebus", "time_wand");
         this.setTranslationKey("timebus.time_wand");
     }

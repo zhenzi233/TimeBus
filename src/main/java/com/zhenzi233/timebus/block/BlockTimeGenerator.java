@@ -4,6 +4,7 @@ import appeng.block.AEBaseTileBlock;
 import appeng.util.Platform;
 import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.client.gui.GuiHandler;
+import com.zhenzi233.timebus.item.TimeBusCreativeTab;
 import com.zhenzi233.timebus.tile.TileTimeGenerator;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -28,7 +29,7 @@ public class BlockTimeGenerator extends AEBaseTileBlock {
         this.setTileEntity(TileTimeGenerator.class);
         this.setRegistryName(TimeBus.MOD_ID, "time_generator");
         this.setTranslationKey(TimeBus.MOD_ID + ".time_generator");
-        this.setCreativeTab(net.minecraft.creativetab.CreativeTabs.REDSTONE);
+        this.setCreativeTab(TimeBusCreativeTab.INSTANCE);
     }
 
     @Override

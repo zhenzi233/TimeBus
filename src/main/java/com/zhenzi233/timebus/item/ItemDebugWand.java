@@ -2,7 +2,6 @@ package com.zhenzi233.timebus.item;
 
 import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.fluid.TimeBusFluids;
-import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
 import net.minecraft.util.EnumActionResult;
@@ -19,7 +18,7 @@ public class ItemDebugWand extends Item {
     public static ItemDebugWand ITEM;
 
     public ItemDebugWand() {
-        this.setCreativeTab(CreativeTabs.MISC);
+        this.setCreativeTab(TimeBusCreativeTab.INSTANCE);
         this.setMaxStackSize(1);
         this.setRegistryName(TimeBus.MOD_ID, "debug_wand");
         this.setTranslationKey(TimeBus.MOD_ID + ".debug_wand");
