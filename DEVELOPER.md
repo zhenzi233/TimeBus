@@ -162,6 +162,16 @@ src/main/java/com/zhenzi233/timebus/
 
 `item/TimeBusCreativeTab.java`：本 mod 所有物品（Time Bus、Debug Wand、Time Wand、Machine Parallel Card、Time Fluid Generator）统一归入 `itemGroup.timebus` 标签页（中英双语 lang key：`itemGroup.timebus`）。
 
+### 6.5 v1.0.1 配方与物品线教训
+
+1. **不要用 PowerShell 字符串拼接写 Java 代码**：单引号字符串里 `\'` 不转义会截断字符串；双引号里 `\"` 不是转义（需反引号），且 `$var` 会被展开吞字符（曾把 `Items.PISTON` 改坏成 `Items.Pis`）。**写代码用编辑器/文件工具，别用 PowerShell Replace 拼 Java**。
+2. **1.12.2 配方 API**：`GameRegistry.addShapelessRecipe(ResourceLocation, ResourceLocation, ItemStack, Ingredient...)` 参数是 `Ingredient...` 不是 `ItemStack`（编译报 varargs 不匹配）；活塞是 `Blocks.PISTON`（`Items.PISTON` 不存在，活塞是方块）。
+3. **AE2 压印配方**：`AEApi.instance().registries().inscriber().builder()`——`withInputs(ItemStack...)`（中间）、`withTopOptional/withBottomOptional`（上下，可为空）、`withOutput`、`withProcessType(InscriberProcessType.INSCRIBE/PRESS)`，最后 `.build()` 交给 `reg.addRecipe`；引用 AE2 物品用 `AEApi.instance().definitions().materials()/items()/blocks()` 的 `maybeStack(1)`（如 `matterBall()`、`engProcessorPress()`、`siliconPrint()`、`advCard()`、`blocks().inscriber()`）。
+4. **脚本按行处理文件有丢行风险**：修复脚本的 else 分支若漏写会吞掉后续行导致文件缺闭合（`TimeBusRecipes.java:66 语法错误：已到文件结尾`）——**脚本改完必须重新编译验证**。
+5. **动画材质**：竖条拼图 png（如 16x192 = 12 帧）+ 同名 `.png.mcmeta`：`{"animation":{"frametime":4}}`，`frametime` 是帧 tick（每 4 tick 切一帧）。
+6. **设计稿源文件（psb/psd）不入库**：git add 前排除，只提交最终 png/png.mcmeta。
+7. **配方注册在 postInit**：压印机配方（`IInscriberRegistry`）与工作台配方（`GameRegistry`）都在 `TimeBus.postInit` 统一注册，物品必须先注册完成。
+
 ## 7. 开发环境
 
 - CleanroomLoader `0.5.17-alpha`，Unimined `1.4.26-kappa`，Java 25 toolchain
