@@ -1,10 +1,10 @@
 {
     "textures": {
-        "sides": "appliedenergistics2:parts/export_bus_sides",
-        "sidesStatus": "appliedenergistics2:parts/monitor_sides_status",
-        "back": "appliedenergistics2:parts/monitor_back",
-        "front": "appliedenergistics2:items/part/export_bus",
-        "particle": "appliedenergistics2:parts/monitor_back"
+        "sides": "timebus:parts/export_bus_sides",
+        "sidesStatus": "timebus:parts/monitor_sides_status",
+        "back": "timebus:parts/monitor_back",
+        "front": "timebus:items/part/export_bus",
+        "particle": "timebus:parts/monitor_back"
     },
     "elements": [
         {
@@ -13,9 +13,9 @@
             "faces": {
                 "down":  { "texture": "#sides" },
                 "up":    { "texture": "#sides" },
-                "north": { "texture": "#front" },
                 "south": { "texture": "#back" },
                 "east":  { "texture": "#sides" },
+                "north": { "texture": "#front" },
                 "west":  { "texture": "#sides" }
             }
         },
@@ -25,9 +25,9 @@
             "faces": {
                 "down":  { "texture": "#sides" },
                 "up":    { "texture": "#sides" },
-                "north": { "texture": "#front" },
                 "south": { "texture": "#back" },
                 "east":  { "texture": "#sides" },
+                "north": { "texture": "#front" },
                 "west":  { "texture": "#sides" }
             }
         },
@@ -37,9 +37,9 @@
             "faces": {
                 "down":  { "texture": "#sides" },
                 "up":    { "texture": "#sides" },
-                "north": { "texture": "#front" },
                 "south": { "texture": "#back" },
                 "east":  { "texture": "#sides" },
+                "north": { "texture": "#front" },
                 "west":  { "texture": "#sides" }
             }
         },

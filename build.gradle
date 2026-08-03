@@ -122,6 +122,9 @@ apply from: 'gradle/scripts/dependencies.gradle'
 
 processResources {
     rename '(.+_at.cfg)', 'META-INF/$1'
+    filesMatching('mcmod.info') {
+        expand 'mod_version': mod_version
+    }
 }
 
 sourceSets {

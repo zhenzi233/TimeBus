@@ -191,7 +191,7 @@ src/main/java/com/zhenzi233/timebus/
 - CleanroomLoader `0.5.17-alpha`，Unimined `1.4.26-kappa`，Java 25 toolchain
 - 构建：`gradlew build`（产物在 `build/libs/timebus-1.0.0.jar`）
 - 依赖：AE2 UEL（`curse.maven:ae2-extended-life-570458:6302098`）、JEI、The One Probe
-- 注意：Cleanroom 的方法名与 MCP 不同（如 `Block.onEntityCollision` 而非 `onEntityCollidedWithBlock`），改动前先在 `F:\Mcmod\Git`（AE2 源码）或 jar 里确认签名
+- 注意：Cleanroom 的方法名与 MCP 不同（如 `Block.onEntityCollision` 而非 `onEntityCollidedWithBlock`），改动前先在 `F:\AiWork\Mcmod\Git`（AE2 UEL 源码 git 克隆）或运行时 jar 里确认签名
 
 ### 常见坑
 
@@ -206,3 +206,72 @@ src/main/java/com/zhenzi233/timebus/
 - **文档写坏后从 git 恢复**：`git checkout -- <file>`（git 里有干净版本时）——改文档前先确认 git 状态，写坏可一键还原
 - **多行 PowerShell 命令会被工具安全拦截**：复杂逻辑（here-string、循环、条件）写成 `.ps1` 文件再 `powershell -ExecutionPolicy Bypass -File xxx.ps1` 执行，用完删除
 - **File 工具的 `edit` 对含花括号的大段 Java 代码可能误报 "unbalanced braces"**：改用 `File patch`（unified diff）或 PowerShell 单行精确 `Replace`（注意行尾符：文件是 LF 还是 CRLF，替换串要一致）
+
+## 8. Part 模型与材质（AE2 UEL 兼容）
+
+时间总线是挂在 ME 线缆上的 part，模型/材质必须与 **AE2 UEL 的渲染约定**一致（UEL fork 了模型加载，和老版 AE2 rv6 不同）。AE2 UEL 源码素材在 `F:\AiWork\Mcmod\Git\src\main\resources`。
+
+### 8.1 文件组织（照抄 AE 的 part 写法）
+
+```
+assets/timebus/models/
+├── item/part/part.json      # 纯 display 变换父模型（gui/ground/fixed/thirdperson/firstperson）
+├── item/time_bus.json       # 物品模型：parent = timebus:item/part/part，自带 textures + elements
+└── part/
+    ├── time_bus_base.json        # 放置后本体（4 个元素）
+    ├── time_bus_on.json          # 通电指示 overlay
+    ├── time_bus_off.json         # 断电指示 overlay
+    └── time_bus_has_channel.json # 有频道指示 overlay
+```
+
+- **display 变换单独放父模型**：每个 part 物品模型继承 `item/part/part`（等价 AE2 的 `appliedenergistics2:item/part/part`），再自带 `textures` + `elements`——不要把 display 直接写进 part 放置模型
+- `PartTimeBus.java` 用 `@PartModels` + `PartModel(MODEL_BASE, overlay)` 组合：`getStaticModels()` 按 激活+有频道/仅通电/断电 返回 `MODELS_HAS_CHANNEL / MODELS_ON / MODELS_OFF`
+
+### 8.2 overlay 指示条：UEL 与 rv6 的差异（错位的根因）
+
+**UEL 的 on/off/has_channel 指示条元素位于 `[6,6,4]-[10,10,5]`**（与 base 第 4 个元素的指示板位置重合，作为发光叠加层渲染），**不是老 rv6 的 `[6,6,16]-[10,10,17]`**——照抄 rv6 模型会导致指示条与本体错位。
+
+UEL 自定义键（`appeng/client/render/model/UVLModelLoader.java` 处理）：
+
+| 模型 | 关键内容 |
+|---|---|
+| `time_bus_on` | `"ae2_uvl_marker": true`；四个面 `"tintindex": 3` + `"uvlightmap": {"sky": 0.007, "block": 0.007}`；贴图 `monitor_sides_status_on` |
+| `time_bus_off` | 无 marker/tintindex/uvlightmap（不发光）；贴图 `monitor_sides_status_off` |
+| `time_bus_has_channel` | `"ae2_uvl_marker": true`；`"tintindex": 1` + uvlightmap；贴图 `monitor_sides_status_has_channel` |
+
+`has_channel` 用专门的 `monitor_sides_status_has_channel` 贴图，别偷懒复用 `_on`。
+
+### 8.3 物品模型要居中（槽位右下角问题的根因）
+
+- part **放置**几何 z 轴是 `0~5`（贴线缆面为 z=0），**不能直接拿来当物品几何**——物品渲染会把 z 偏置带进视角，看起来偏到槽位右下角
+- **物品几何照抄 AE2 的 `item/part/export_bus.json`**：三个元素 `[4,4,8]-[12,12,10]`、`[5,5,7]-[11,11,8]`、`[6,6,6]-[10,10,7]`（z 以 8 为中心），并保留其 UV 映射
+- 验证方式：与 AE2 原版替换贴图路径后逐字符比对
+
+### 8.4 材质自包含
+
+从 AE2 UEL 复制的贴图（均 16×16，复制后做 SHA256 哈希校验）：
+
+```
+assets/timebus/textures/
+├── parts/export_bus_sides.png               # 侧面（AE2: parts/export_bus_sides.png）
+├── parts/monitor_back.png                   # 背面（AE2: parts/monitor_back.png）
+├── parts/monitor_sides_status{,_on,_off,_has_channel}.png  # 指示条
+└── items/part/export_bus.png                # 正面（AE2: items/part/export_bus.png）
+```
+
+模型里的纹理引用全部用本地 `timebus:parts/...`、`timebus:items/part/...`，不要在模型 JSON 里留 `appliedenergistics2:` 引用。
+
+术语注意：AE2 中文里 "**ME输出总线**" = `export_bus`（`item.appliedenergistics2.multi_part.export_bus.name=ME输出总线`）；AE2 UEL 没有独立的 `output_bus`，找素材以 `export_bus` 为准。
+
+### 8.5 Blockbench 导出的坑
+
+- **通用导出（`"format_version": "1.21.11"` + `"credit": "Made with Blockbench"`）会把每个面写成裁剪 UV**（如 `"north": {"uv": [4,4,12,12]}`），把 16×16 贴图切成小区域，贴图显示被切碎、与 AE2 结构不兼容——**必须用 Blockbench 的 Minecraft 1.12.2 预设导出**，并保持面贴图为完整 16×16 不裁剪
+- 模型文件可能被外部工具改写：改前先看文件 `LastWriteTime` / git status，被改写时保留备份（如 `time_bus_base.blockbench.bak`）再恢复
+- 1.12.2 模型加载器只认 `parent/textures/elements/display`，其余顶层键（`format_version`、`credit`）会被忽略但不报错
+
+### 8.6 验证清单（改完模型必做）
+
+1. JSON 合法性：`Get-Content -Raw -Encoding UTF8 xxx.json | ConvertFrom-Json`
+2. 结构比对：把 `timebus:` 路径替换回 `appliedenergistics2:` 后**去除全部空白**，与 AE2 原版逐字符比较（键顺序也要一致，否则会误报差异）
+3. 贴图校验：SHA256 与源文件一致 + `System.Drawing` 读取尺寸为 16×16
+4. 全目录 grep 无残留 `appliedenergistics2:` 贴图引用（GUI 的 `textures/guis/states.png` 在 Java 里引用，不算模型引用）
