@@ -6,6 +6,8 @@ plugins {
     id 'org.jetbrains.gradle.plugin.idea-ext' version '1.4.1'
     id 'xyz.wagyourtail.unimined' version '1.4.26-kappa'
     id 'net.kyori.blossom' version '2.2.0'
+    id 'com.modrinth.minotaur' version '2.9.0'
+    id 'net.darkhax.curseforgegradle' version '1.1.28'
 }
 
 import org.jetbrains.gradle.ext.Gradle
@@ -119,6 +121,28 @@ compileJava {
 }
 
 apply from: 'gradle/scripts/dependencies.gradle'
+apply from: 'gradle/scripts/publish-platforms.gradle'
+
+// CurseForge 发布任务：插件类只在主脚本编译期可见，因此不放入上面的脚本
+task publishCurseForge(type: net.darkhax.curseforgegradle.TaskPublishCurseForge) {
+    group = 'publishing'
+    description = '上传发布到 CurseForge'
+    apiToken = System.getenv('CURSEFORGE_TOKEN') ?: findProperty('curseforge_token')
+    debugMode = project.ext.publishDebugMode
+
+    def projectId = findProperty('curseforge_project_id')
+    if (projectId) {
+        def mainFile = upload(projectId, tasks.named(project.ext.publishJarTaskName))
+        mainFile.changelog = project.ext.publishChangelog
+        mainFile.changelogType = 'markdown'
+        mainFile.releaseType = 'release'
+        mainFile.addGameVersion('1.12.2')
+        mainFile.addModLoader('Forge')
+        mainFile.addEnvironment('Client', 'Server')
+        mainFile.addRelation('ae2-extended-life', 'requiredDependency')
+    }
+    dependsOn tasks.named(project.ext.publishJarTaskName)
+}
 
 processResources {
     rename '(.+_at.cfg)', 'META-INF/$1'

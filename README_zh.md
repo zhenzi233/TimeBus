@@ -80,6 +80,12 @@
 - AE2 Extended Life（`rv6-stable-7` 或更新）
 - Java 17（Gradle 运行）+ Java 25（编译工具链）
 
+
+## 兼容性
+
+- 目前时间总线与 Mekanism 机器不兼容，暂时无法加速它们。
+- 兼容 Mek 机器是未来版本的计划内容。
+
 ## 构建
 
 ```bat

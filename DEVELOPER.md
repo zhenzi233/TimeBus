@@ -275,3 +275,43 @@ assets/timebus/textures/
 2. 结构比对：把 `timebus:` 路径替换回 `appliedenergistics2:` 后**去除全部空白**，与 AE2 原版逐字符比较（键顺序也要一致，否则会误报差异）
 3. 贴图校验：SHA256 与源文件一致 + `System.Drawing` 读取尺寸为 16×16
 4. 全目录 grep 无残留 `appliedenergistics2:` 贴图引用（GUI 的 `textures/guis/states.png` 在 Java 里引用，不算模型引用）
+
+## 9. 发布流程（Modrinth / CurseForge 自动上传）
+
+两个平台都有自动上传方案，**不用手动拖 jar**：
+
+| 平台 | 工具 | 命令 |
+|---|---|---|
+| Modrinth | `com.modrinth.minotaur` 2.9.0 | `gradlew modrinth` |
+| CurseForge | [publish-curseforge.ps1](gradle/scripts/publish-curseforge.ps1)（curl 直传） | `powershell -File gradle/scripts/publish-curseforge.ps1` |
+
+### 9.1 一次性配置
+
+1. 把两个平台的项目 ID 填进 `gradle.properties`（可提交）：
+   - `modrinth_project_id`：Modrinth 项目主页网址末尾的 ID 或 slug
+   - `curseforge_project_id`：CurseForge 项目主页网址末尾的数字
+2. 配置 API token（敏感，**不要写进仓库**），两种方式任选：
+   - 环境变量：`MODRINTH_TOKEN` / `CURSEFORGE_TOKEN`
+   - 用户级配置：在 `%USERPROFILE%\.gradle\gradle.properties` 里加
+     `modrinth_token=xxx`、`curseforge_token=xxx`
+
+Token 获取：Modrinth 在账号设置页生成（需要 `CREATE_VERSION` 权限）；CurseForge 在账号 API Keys 页生成。
+
+### 9.2 每次发版的步骤
+
+1. 更新 `gradle.properties` 的 `mod_version`，并构建：`gradlew build`
+2. 在 `CHANGELOG.md` 顶部加新版本段落（`## vX.Y.Z`，发布脚本取对应版本段落作为发布说明，支持 Markdown）
+3. 上传：
+   - CurseForge：`powershell -ExecutionPolicy Bypass -File gradle/scripts/publish-curseforge.ps1`（自动读版本号和 changelog）
+   - Modrinth：`gradlew modrinth`（需先填 `modrinth_project_id`）
+4. 演练（Modrinth 不实际上传）：`gradlew modrinth -Ppublish_debug_mode=true`
+5. 另发 GitHub Release（英文说明，参考 v1.0.4 的流程）
+
+### 9.3 注意
+
+- **上传的是 remap 后的发布 jar**（`build/libs/timebus-<ver>.jar`，不带 `dev` 后缀），脚本已自动指向 `remapJar`，不要传 `-dev` 或 `-sources`。
+- **CurseForge 上传不走 Gradle 插件**：CurseForge 上传 API 有 Cloudflare 人机验证，插件（1.1.28，Java 8 编译）的 Apache HttpClient 默认 UA 会被拦（403）。已实测：浏览器 UA 可正常通过，新版插件的 `CurseForgeGradle (DarkhaxDev)` UA 也能过。因此 CurseForge 用 [publish-curseforge.ps1](gradle/scripts/publish-curseforge.ps1) 以 curl + 浏览器 UA 直传，版本 ID（1.12.2=6756、Forge=7498、Client=9638、Server=9639）已固化在脚本里。
+- **CurseForgeGradle 插件版本上限 1.1.28**：1.2.30 起插件用 Java 25 编译，而本项目 Gradle 8.10 跑在 JDK 17 上会直接报 requires-at-least-JVM-runtime-version-25。以后升级 Gradle 到能跑 JDK 25 时，可改回插件（新版已设置能过 Cloudflare 的 UA）。
+- **环境标签**：CurseForge 2026-07-15 起强制要求环境标签，脚本/任务里已显式带上 Client、Server 环境版本。
+- **依赖关系**：AE2 UEL 主项目没发布在 Modrinth，只在 CurseForge 侧配置了 `ae2-extended-life` 必需依赖（slug/关系见发布脚本和任务）。
+- **上传文件**：发布 jar 是 `remapJar` 产物；`enable_shadow=true` 时自动改用 `remapShadowJar`。

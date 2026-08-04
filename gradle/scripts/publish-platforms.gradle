@@ -1,0 +1,63 @@
+// ============================================================================
+// 平台发布：Modrinth（Minotaur）+ CurseForge（CurseForgeGradle）
+//
+// 用法：
+//   gradlew publishModrinth                       # 只上传 Modrinth
+//   gradlew publishCurseForge                     # 只上传 CurseForge
+//   gradlew publishAll                            # 两个平台都上传
+//   gradlew publishAll -Ppublish_debug_mode=true  # 演练模式，只打印不上传
+//
+// 凭证（按优先级取）：
+//   1. 环境变量：MODRINTH_TOKEN / CURSEFORGE_TOKEN
+//   2. 用户级配置：%USERPROFILE%\.gradle\gradle.properties 中的
+//      modrinth_token / curseforge_token（不要写进仓库）
+//
+// 项目 ID 在 gradle.properties 中配置：
+//   modrinth_project_id     # Modrinth 项目 ID 或 slug（网址末尾）
+//   curseforge_project_id   # CurseForge 数字项目 ID（网址末尾的数字）
+// ============================================================================
+
+ext.publishJarTaskName = (findProperty('enable_shadow') ?: 'false').toBoolean() ? 'remapShadowJar' : 'remapJar'
+
+ext.publishDebugMode = (findProperty('publish_debug_mode') ?: 'false').toBoolean()
+
+// 从 CHANGELOG.md 读取第一个 "## " 段作为本次更新日志
+ext.readPublishChangelog = {
+    def changelogFile = rootProject.file('CHANGELOG.md')
+    if (!changelogFile.exists()) {
+        return 'See GitHub releases for details: https://github.com/zhenzi233/TimeBus/releases'
+    }
+    def lines = changelogFile.readLines('UTF-8')
+    def headers = lines.findIndexValues { it.startsWith('## ') }
+    if (headers.isEmpty()) {
+        return changelogFile.getText('UTF-8').trim()
+    }
+    def start = headers[0]
+    def end = headers.size() > 1 ? headers[1] : lines.size()
+    return lines[start..<end].join('\n').trim()
+}
+
+ext.publishChangelog = ext.readPublishChangelog()
+
+// ================================ Modrinth ================================
+modrinth {
+    token = System.getenv('MODRINTH_TOKEN') ?: findProperty('modrinth_token')
+    projectId = findProperty('modrinth_project_id')
+    versionNumber = mod_version
+    versionName = "${mod_name} ${mod_version}"
+    versionType = 'release'
+    uploadFile = tasks.named(publishJarTaskName)
+    gameVersions = ['1.12.2']
+    loaders = ['forge']
+    changelog = publishChangelog
+    debugMode = publishDebugMode
+    // 注：AE2 UEL 主项目未发布在 Modrinth，无法声明依赖关系
+}
+
+
+// ================================= 一起传 =================================
+tasks.register('publishAll') {
+    group = 'publishing'
+    description = '上传到 Modrinth 和 CurseForge'
+    dependsOn 'modrinth', 'publishCurseForge'
+}

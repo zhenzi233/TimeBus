@@ -76,6 +76,12 @@ An AE-powered, 512-byte **fluid storage cell** that holds only Time Fluid (model
 - AE2 Extended Life (`rv6-stable-7` or newer)
 - Java 17 (Gradle runtime) + Java 25 (compile toolchain)
 
+
+## Compatibility
+
+- Time Bus currently does **not** work with Mekanism machines (they cannot be accelerated yet).
+- Mekanism machine support is planned for a future release.
+
 ## Build
 
 ```bat
