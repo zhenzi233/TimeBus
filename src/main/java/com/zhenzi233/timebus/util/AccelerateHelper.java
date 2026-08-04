@@ -13,9 +13,9 @@ import net.minecraft.world.World;
  *
  * "Accelerating once" mirrors what the Time Bus does for one block:
  *   1. schedule one tick
- *   2. call ITickable.update() (speed-1) times 闂?AE2 Chargers get their
+ *   2. call ITickable.update() (speed-1) times; AE2 Chargers get their
  *      private doWork() invoked via a cached reflection handle instead
- *   3. call Block.updateTick() (speed * 20) times for randomly-ticking blocks
+ *   3. call Block.randomTick() (speed * 20) times for randomly-ticking blocks
  *
  * Every per-block action is isolated with try/catch so one broken block
  * never breaks the rest of the batch.
@@ -156,7 +156,11 @@ public final class AccelerateHelper {
     }
 
     /**
-     * Run up to {@code n} Block.updateTick calls on a randomly-ticking block.
+     * Run up to {@code n} Block.randomTick calls on a randomly-ticking block.
+     * randomTick is the entry point of the vanilla random-tick loop: the
+     * default implementation delegates to updateTick (crops, saplings, ...),
+     * while blocks that override randomTick directly (grass spread, ice melt,
+     * snow, torch burnout, ...) are covered as well.
      *
      * @return how many calls actually ran
      */
@@ -172,10 +176,10 @@ public final class AccelerateHelper {
                 break;
             }
             try {
-                targetBlock.updateTick(world, target, targetState, world.rand);
+                targetBlock.randomTick(world, target, targetState, world.rand);
                 ran++;
             } catch (Exception e) {
-                TimeBus.LOGGER.warn("Time Bus: updateTick failed at {}: {}", target, e.toString());
+                TimeBus.LOGGER.warn("Time Bus: randomTick failed at {}: {}", target, e.toString());
                 break;
             }
         }
@@ -183,7 +187,7 @@ public final class AccelerateHelper {
     }
 
     /** Cached reflection handle for TileCharger.doWork() (private in AE2). */
-    private static java.lang.reflect.Method chargerDoWork;
+    private static volatile java.lang.reflect.Method chargerDoWork;
 
     private static java.lang.reflect.Method getChargerDoWork() {
         if (chargerDoWork == null) {

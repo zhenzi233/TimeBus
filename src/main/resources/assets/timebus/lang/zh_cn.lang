@@ -30,3 +30,6 @@ gui.timebus.generator.balls=物质球: %1$d 个已投入
 gui.timebus.generator.singularities=奇点: %1$d 个已投入
 
 key.categories.timebus=时间总线
+msg.timebus.not_enough_energy=时间杖能量不足
+msg.timebus.not_enough_fluid=时间杖时间流体不足
+msg.timebus.bus_idle=不是有效的总线

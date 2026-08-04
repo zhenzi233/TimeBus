@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/zhenzi233/TimeBus/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/badge/release-v1.0.4-blue)](https://github.com/zhenzi233/TimeBus/releases/tag/v1.0.4)
 
 An **Applied Energistics 2** addon for Minecraft 1.12.2 (CleanroomLoader) centered on **time manipulation**: accelerate blocks and AE2 machines, produce and store a special **Time Fluid**, and wield the **Time Wand** for on-demand acceleration and bus batch transfers.
 
@@ -13,15 +13,28 @@ An **Applied Energistics 2** addon for Minecraft 1.12.2 (CleanroomLoader) center
 - **Time acceleration**: accelerates a row of blocks in front of the bus — scheduled block updates, tile entities, and random ticks.
 - **AE2 device acceleration**: works on grid-ticked AE2 machines too:
   - **Charger** (via its private `doWork()`), **Inscriber**, **Molecular Assembler**, **Vibration Chamber**, **IO Port**.
-- **Speed upgrade cards**: up to 4 speed cards, each multiplying the acceleration rate (`2,4,8,16,32x` by default).
+- **Speed upgrade cards**: up to 4 speed cards, each multiplying the acceleration rate (`2,4,8,16,32x` by default). A bus with **no speed cards already accelerates at 2x** (the first configured multiplier), so acceleration starts at 2x, not 1x.
 - **Capacity upgrade cards**: up to 3 capacity cards, extending the acceleration range (`1,3,9,15` blocks by default).
 - **Redstone control**: high / low / pulse modes (requires 1 redstone card).
 - **Fuzzy mode**: AE2 fuzzy card support.
 - **Two fuel modes**:
   - **AE power** (default): draws AE energy from the ME network while accelerating.
   - **Fluid mode** (configurable): consumes a fluid from the ME network instead (bundled with the `time_fluid`, or any registered fluid).
-- **Performance-safe**: a work budget caps the number of acceleration calls per server tick (`maxCallsPerTick`, default 128), so fully-upgraded buses never spike the tick; excess work carries over to the next tick.
+- **Performance-safe**: each bus has its own work budget (`maxCallsPerTick`, default 128 acceleration calls per tick). The budget is **per bus, not global** - N buses can issue up to N x 128 calls/tick - and excess work carries over to the next tick, so a fully-upgraded bus never spikes a single tick.
 - **GUI**: shows current speed, range, power draw, and live work-budget usage.
+
+#### What one acceleration burst does
+
+A burst on one block = 1 scheduled block update + a tile-entity phase + `speed x 20` random ticks (when the block ticks randomly). The tile phase depends on the machine:
+
+| Target | Tile phase of one burst |
+| --- | --- |
+| `ITickable` machines (furnaces, crops, ...) | `speed - 1` `update()` calls |
+| AE2 Charger | `speed - 1` `doWork()` calls |
+| Inscriber / Molecular Assembler / Vibration Chamber | `speed - 1` calls of `tickingRequest(null, speed)`, each advancing `speed` ticks of progress |
+| IO Port | `speed - 1` calls of `tickingRequest(null, 1)`, each moving one transfer batch |
+
+So the `32x` rating is an approximation: a 32x bus advances ITickable machines ~31 ticks, grid machines ~31 x 32 = 992 ticks of progress, and IO Ports ~31 batches per burst.
 
 ### Time Fluid
 
@@ -70,9 +83,9 @@ gradlew.bat build
 ```
 
 Output jars land in `build/libs/`:
-- `timebus-1.0.0.jar` — release jar (remapped)
-- `timebus-1.0.0-dev.jar` — development jar
-- `timebus-1.0.0-sources.jar` — sources
+- `timebus-1.0.4.jar` — release jar (remapped)
+- `timebus-1.0.4-dev.jar` — development jar
+- `timebus-1.0.4-sources.jar` — sources
 
 Prebuilt jars are published on the [Releases](https://github.com/zhenzi233/TimeBus/releases) page.
 

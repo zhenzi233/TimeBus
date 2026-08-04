@@ -4,6 +4,7 @@ import appeng.api.AEApi;
 import appeng.api.config.Actionable;
 import appeng.api.config.Upgrades;
 import appeng.api.networking.ticking.IGridTickable;
+import appeng.api.networking.ticking.TickRateModulation;
 import appeng.api.parts.IPart;
 import appeng.parts.automation.PartExportBus;
 import appeng.parts.automation.PartImportBus;
@@ -14,6 +15,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumParticleTypes;
 import net.minecraft.util.EnumHand;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.util.math.BlockPos;
 import appeng.api.config.FuzzyMode;
 import appeng.api.implementations.items.IStorageCell;
@@ -114,14 +116,18 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             return EnumActionResult.PASS;
         }
         if (worldIn.isRemote) {
+            final ItemStack held = player.getHeldItem(hand);
+            // Cheap precheck from the item NBT: never show the burst when the
+            // wand cannot actually pay (the server stays authoritative and
+            // reports the real failure via a status message).
+            final boolean enough = hasEnoughResources(held);
             // Client side: if we hit an ME Import/Export Bus, intercept so the
             // bus GUI does not open (server will run the batch transfer).
             final IPart hitPart = AEApi.instance().partHelper().getPart(worldIn, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
             if (hitPart instanceof PartExportBus || hitPart instanceof PartImportBus) {
                 // Visual feedback for the batch transfer: same outward burst
                 // as block acceleration (server can't spawn the 7-arg particles).
-                final ItemStack held = player.getHeldItem(hand);
-                if (TimeBusFluids.TIME_FLUID != null) {
+                if (enough && TimeBusFluids.TIME_FLUID != null) {
                     spawnBurstParticles(worldIn, pos, getWandSpeed(held));
                 }
                 return EnumActionResult.SUCCESS;
@@ -129,11 +135,10 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             // Otherwise render the particle burst locally. The 7-arg
             // World.spawnParticle overload only draws on the client, so the
             // burst must be spawned here, not from the server branch.
-            final ItemStack held = player.getHeldItem(hand);
-            if (TimeBusFluids.TIME_FLUID != null) {
+            if (enough && TimeBusFluids.TIME_FLUID != null) {
                 spawnBurstParticles(worldIn, pos, getWandSpeed(held));
             }
-            return EnumActionResult.SUCCESS;
+            return enough ? EnumActionResult.SUCCESS : EnumActionResult.FAIL;
         }
         final ItemStack stack = player.getHeldItem(hand);
         if (TimeBusFluids.TIME_FLUID == null) {
@@ -148,38 +153,114 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         }
 
 
-        // 1. Check AE energy (simulate first, commit only if everything is available).
-        final double energyNeed = TimeBusConfig.wandEnergyCost;
-        if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
-            return EnumActionResult.FAIL; // not enough AE power
+        // Consume AE power + Time Fluid (simulate first, commit only if both are available).
+        if (!tryConsumeCosts(player, stack)) {
+            return EnumActionResult.FAIL;
         }
 
-        // 2. Check Time Fluid in the wand's cell.
-        final appeng.api.storage.ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
+        // Accelerate the target block once. (Particles are rendered by the
+        // client branch of onItemUse.)
+        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack));
+        return EnumActionResult.SUCCESS;
+    }
+    /**
+     * Cheap client-side precheck that the wand holds enough AE power and Time
+     * Fluid. Reads only the item NBT (same path the tooltip uses), so it is
+     * safe to call on the client; the server remains authoritative.
+     */
+    private boolean hasEnoughResources(final ItemStack stack) {
+        if (TimeBusFluids.TIME_FLUID == null) {
+            return false;
+        }
+        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
+            return false;
+        }
+        final ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
                 .registries().cell()
                 .getCellInventory(stack, null,
-                        AEApi.instance().storage().getStorageChannel(appeng.api.storage.channels.IFluidStorageChannel.class));
+                        AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class));
         if (cell == null) {
-            return EnumActionResult.FAIL;
+            return false;
+        }
+        final int fluidNeed = TimeBusConfig.wandFluidCost;
+        final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
+        final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
+        return taken != null && taken.getStackSize() >= fluidNeed;
+    }
+
+    /** Report a failed use to the player (synced to the client by vanilla). */
+    private void sendNotEnough(final EntityPlayer player, final boolean energy) {
+        if (player != null) {
+            player.sendStatusMessage(new TextComponentTranslation(
+                    energy ? "msg.timebus.not_enough_energy" : "msg.timebus.not_enough_fluid"), true);
+        }
+    }
+
+    /** Report that the targeted bus has nothing to transfer. */
+    private void sendBusIdle(final EntityPlayer player) {
+        if (player != null) {
+            player.sendStatusMessage(new TextComponentTranslation("msg.timebus.bus_idle"), true);
+        }
+    }
+    /**
+     * Server-side resource payment: simulate AE power + Time Fluid first,
+     * commit only if both are available, and tell the player what is missing.
+     * Shared by the block-acceleration and bus-batch paths.
+     */
+    private boolean tryConsumeCosts(final EntityPlayer player, final ItemStack stack) {
+        if (!hasEnoughCosts(player, stack)) {
+            return false;
+        }
+        commitCosts(stack);
+        return true;
+    }
+
+    /** Simulate AE power + Time Fluid availability; reports what is missing. */
+    private boolean hasEnoughCosts(final EntityPlayer player, final ItemStack stack) {
+        if (TimeBusFluids.TIME_FLUID == null) {
+            return false;
+        }
+        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
+            sendNotEnough(player, true);
+            return false;
+        }
+        final ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
+                .registries().cell()
+                .getCellInventory(stack, null,
+                        AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class));
+        if (cell == null) {
+            sendNotEnough(player, false);
+            return false;
         }
         final int fluidNeed = TimeBusConfig.wandFluidCost;
         final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
         final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
         if (taken == null || taken.getStackSize() < fluidNeed) {
-            return EnumActionResult.FAIL; // not enough Time Fluid
+            sendNotEnough(player, false);
+            return false;
         }
-
-        // 3. Commit both costs.
-        this.extractAEPower(stack, energyNeed, Actionable.MODULATE);
-        cell.extractItems(request, Actionable.MODULATE, null);
-
-        // 4. Accelerate the target block once. (Particles are rendered by the
-        //    client branch of onItemUse.)
-        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack));
-        return EnumActionResult.SUCCESS;
+        return true;
     }
+
+    /** Commit the AE power + Time Fluid payment (call after hasEnoughCosts). */
+    private void commitCosts(final ItemStack stack) {
+        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        this.extractAEPower(stack, energyNeed, Actionable.MODULATE);
+        final ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
+                .registries().cell()
+                .getCellInventory(stack, null,
+                        AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class));
+        if (cell != null) {
+            final int fluidNeed = TimeBusConfig.wandFluidCost;
+            final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
+            cell.extractItems(request, Actionable.MODULATE, null);
+        }
+    }
+
     /**
-     * Non-shift right-click on an ME Import/Export Bus: consume Time Fluid + AE
+     * Shift right-click on an ME Import/Export Bus: consume Time Fluid + AE
      * and run the bus's tickingRequest N times (wandBatchSize), so one click
      * transfers many batches at once. Client predicts by checking the part type.
      */
@@ -197,39 +278,30 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         }
 
         final ItemStack stack = player.getHeldItem(hand);
-        if (TimeBusFluids.TIME_FLUID == null) {
+
+        // Simulate the costs first (nothing is consumed yet), then probe one
+        // work cycle: only pay and batch when the bus actually has something
+        // to move. An idle import/export bus returns SLOWER (not SLEEP), so
+        // "did work" means the FASTER result of this cycle.
+        if (!hasEnoughCosts(player, stack)) {
             return EnumActionResult.FAIL;
         }
-
-        // 1. Check AE energy (simulate first).
-        final double energyNeed = TimeBusConfig.wandEnergyCost;
-        if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
-            return EnumActionResult.FAIL;
-        }
-
-        // 2. Check Time Fluid in the wand's cell.
-        final appeng.api.storage.ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
-                .registries().cell()
-                .getCellInventory(stack, null,
-                        AEApi.instance().storage().getStorageChannel(appeng.api.storage.channels.IFluidStorageChannel.class));
-        if (cell == null) {
-            return EnumActionResult.FAIL;
-        }
-        final int fluidNeed = TimeBusConfig.wandFluidCost;
-        final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
-        final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
-        if (taken == null || taken.getStackSize() < fluidNeed) {
-            return EnumActionResult.FAIL;
-        }
-
-        // 3. Commit both costs.
-        this.extractAEPower(stack, energyNeed, Actionable.MODULATE);
-        cell.extractItems(request, Actionable.MODULATE, null);
-
-        // 4. Batch: run the bus work N times.
-        final int n = Math.max(1, TimeBusConfig.wandBatchSize);
         final IGridTickable bus = (IGridTickable) part;
-        for (int i = 0; i < n; i++) {
+        try {
+            if (bus.tickingRequest(null, 1) != TickRateModulation.FASTER) {
+                sendBusIdle(player);
+                return EnumActionResult.FAIL;
+            }
+        } catch (Exception e) {
+            TimeBus.LOGGER.warn("Time Bus: bus tickingRequest failed at {}: {}", pos, e.toString());
+            sendBusIdle(player);
+            return EnumActionResult.FAIL;
+        }
+        commitCosts(stack);
+
+        // Batch: run the remaining bus work calls (the probe already did one).
+        final int n = Math.max(1, TimeBusConfig.wandBatchSize);
+        for (int i = 1; i < n; i++) {
             try {
                 bus.tickingRequest(null, 1);
             } catch (Exception e) {

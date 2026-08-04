@@ -167,7 +167,13 @@ public abstract class MixinTileInscriber {
     /** Consume up to {@code amount} items from the given inventory slot, keeping the rest. */
     private ItemStack timebus$consumeN(AppEngInternalInventory inv, int amount) {
         ItemStack current = inv.getStackInSlot(0);
-        final int take = Math.min(current.getCount(), amount);
+        // Defensive: batch is -1 until the output simulation has computed it.
+        // If a consume ever ran first, Math.max(1, amount) degrades to the
+        // vanilla no-card behaviour (consume 1) instead of shrink(-1) which
+        // would ADD an item (duplication). The finish sequence still relies
+        // on insertItem(sim) running before setStackInSlot; keep this as a
+        // regression checkpoint when upgrading AE2.
+        final int take = Math.min(current.getCount(), Math.max(1, amount));
         current.shrink(take);
         return current.isEmpty() ? ItemStack.EMPTY : current;
     }
@@ -212,9 +218,11 @@ public abstract class MixinTileInscriber {
         if (this.timebus$batch < 0) {
             this.timebus$batch = this.timebus$computeBatch();
         }
-        // TEMP DIAG
-        // Produce exactly as many as we consume (capped by every slot stock).
-        stack.setCount(stack.getCount() * this.timebus$batch);
+        // Clamp to the item's stack limit: insertItem returns any overflow and
+        // the vanilla finish step has no path back into the input slot, so an
+        // unclamped product would silently drop items (e.g. maxStack=1 outputs).
+        final int scaled = stack.getCount() * this.timebus$batch;
+        stack.setCount(Math.min(scaled, stack.getMaxStackSize()));
         return stack;
     }
 

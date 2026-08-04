@@ -57,7 +57,7 @@ src/main/java/com/zhenzi233/timebus/
 关键约定：
 - `tickingRequest` 的 `node` 参数在 AE2 这些 tile 内部未被使用，传 `null` 安全
 - 所有调用 try/catch，失败只记日志不中断
-- 返回实际执行次数，供预算统计
+- 返回实际执行次数，供预算统计；**返回值是"调用次数"，不是"推进刻数"**——Inscriber/分子装配室/振动室一次调用推进 `speed` 刻，IOPort 一次调用 1 批传输
 
 ### 2.3 工作预算（PartTimeBus）
 

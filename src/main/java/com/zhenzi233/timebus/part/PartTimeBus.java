@@ -93,6 +93,8 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     private boolean workActive = false;  // true while a work batch is in progress
     private int budgetUsedLastTick = 0;  // calls actually spent last tick (for GUI)
     private int budgetTotalLastTick = 0; // budget available last tick (for GUI)
+    private boolean workDidSomething = false; // true if the last completed batch did real work
+    private int idleTicks = 0;               // consecutive ticks with nothing to accelerate
 
     @Override
     public IItemHandler getInventoryByName(String name) {
@@ -239,7 +241,15 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         }
         extractAEPower(ticksSinceLastCall);
         doWork();
-        return TickRateModulation.URGENT;
+        // Back off when nothing real happened for a while (no blocks in range,
+        // no fluid, ...) so an idle bus stops scanning every tick. Any actual
+        // work or an unfinished batch resets the counter.
+        if (!workActive && !workDidSomething) {
+            idleTicks++;
+        } else {
+            idleTicks = 0;
+        }
+        return idleTicks >= 40 ? TickRateModulation.SLOWER : TickRateModulation.URGENT;
     }
 
     private void doWork() {
@@ -257,6 +267,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             workPhase = PHASE_SCHEDULE;
             workPhaseRemaining = 0;
             workActive = true;
+            workDidSomething = false;
         }
 
         AEPartLocation facing = this.getSide();
@@ -275,6 +286,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             switch (workPhase) {
                 case PHASE_SCHEDULE: {
                     if (!targetBlock.isAir(targetState, world, target)) {
+                        workDidSomething = true;
                         try {
                             // MC dedupes scheduled updates by (pos, block), so one call is enough.
                             world.scheduleBlockUpdate(target, targetBlock, 1, 0);
@@ -299,6 +311,9 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     int n = Math.min(workPhaseRemaining, budget - used);
                     n = com.zhenzi233.timebus.util.AccelerateHelper.runTileUpdates(world, target, n, speed);
                     used += n;
+                    if (n > 0) {
+                        workDidSomething = true;
+                    }
                     workPhaseRemaining -= n;
                     if (workPhaseRemaining <= 0) {
                         advancePhase(targetBlock, target, world, speed);
@@ -313,6 +328,9 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     int n = Math.min(workPhaseRemaining, budget - used);
                     n = com.zhenzi233.timebus.util.AccelerateHelper.runRandomTicks(world, target, targetState, targetBlock, n);
                     used += n;
+                    if (n > 0) {
+                        workDidSomething = true;
+                    }
                     workPhaseRemaining -= n;
                     if (workPhaseRemaining <= 0) {
                         workBlockIndex++;

@@ -31,3 +31,6 @@ gui.timebus.generator.singularities=Singularities: %1$d fed
 
 key.categories.timebus=Time Bus
 
+msg.timebus.not_enough_energy=Not enough AE power in the Time Wand
+msg.timebus.not_enough_fluid=Not enough Time Fluid in the Time Wand
+msg.timebus.bus_idle=Not a valid bus
