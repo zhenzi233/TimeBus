@@ -22,6 +22,7 @@ src/main/java/com/zhenzi233/timebus/
 │   ├── MixinUpgradeInvFilter.java    # 升级槽放行机器并行卡
 │   └── MixinTileInscriber.java       # 压印机并行逻辑（N+1 消耗/产出）
 ├── util/AccelerateHelper.java  # 加速引擎（唯一加速逻辑归属）
+├── util/ModularMachineryAccelerator.java # MM(CE) 配方时长压缩（反射注入 duration modifier）
 ├── tile/                   # 时间流体发生器（方块实体 + 容器 + GUI）
 ├── client/gui/             # 发生器 GUI / 时间总线 GUI
 └── network/                # 模式切换网络包
@@ -76,6 +77,8 @@ src/main/java/com/zhenzi233/timebus/
 
 调度门当前识别：`ITickable`、`TileCharger`、`TileInscriber`、`TileMolecularAssembler`、`TileVibrationChamber`、`TileIOPort`。
 
+> 反加速机器（Mekanism CE / ModularMachinery CE，`TileEntityRestrictedTick` 系列）：`update()` 是 final 且同 tick 去重，连调无效。MM 走配方时长压缩（`ModularMachineryAccelerator` 向 RecipeThread 注入 duration modifier，总消耗不变，倍率跟随总线速度卡：0卡=2x…满配=32x）；Mek 走 `ticksRequired` 字段压缩（待实现）。两类默认关闭，opt-in。
+
 ## 3. 时间杖（ItemTimeWand）
 
 `AEBasePoweredItem implements IStorageCell<IAEFluidStack>`：可配置字节数（默认 512）、1 类型、仅存时间流体、AE 供电。
@@ -115,6 +118,7 @@ src/main/java/com/zhenzi233/timebus/
 | `wandSpeedMultipliers` | `2,4,8,16,32` | 时间杖加速卡倍率（独立于总线） |
 | `wandFluidCost` / `wandEnergyCost` | 10 / 1000 | 时间杖单次消耗 |
 | `wandBatchSize` | 16 | 总线批量传输的批次次数 |
+| `mmAccelerationEnabled` | false | MM(CE) 配方时长压缩（opt-in，倍率=总线速度卡：0卡=2x…满配=32x，每批总消耗不变） |
 
 配置界面已本地化（`config.timebus.*` lang keys，中英双语）。
 
@@ -192,6 +196,7 @@ src/main/java/com/zhenzi233/timebus/
 - CleanroomLoader `0.5.17-alpha`，Unimined `1.4.26-kappa`，Java 25 toolchain
 - 构建：`gradlew build`（产物在 `build/libs/timebus-1.0.0.jar`）
 - 依赖：AE2 UEL（`curse.maven:ae2-extended-life-570458:6302098`）、JEI、The One Probe
+- 依赖（运行期软依赖）：MMCE（`curse.maven:modularmachinery-community-edition-817377:7372951`，modRuntimeOnly，纯反射调用）；Mek CE 待补
 - 注意：Cleanroom 的方法名与 MCP 不同（如 `Block.onEntityCollision` 而非 `onEntityCollidedWithBlock`），改动前先在 `F:\AiWork\Mcmod\Git`（AE2 UEL 源码 git 克隆）或运行时 jar 里确认签名
 
 ### 常见坑

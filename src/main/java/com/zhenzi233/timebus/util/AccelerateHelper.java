@@ -1,6 +1,7 @@
 package com.zhenzi233.timebus.util;
 
 import com.zhenzi233.timebus.TimeBus;
+import com.zhenzi233.timebus.config.TimeBusConfig;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.tileentity.TileEntity;
@@ -136,6 +137,23 @@ public final class AccelerateHelper {
                 TimeBus.LOGGER.warn("Time Bus: TileIOPort.tickingRequest failed at {}: {}", target, e.toString());
                 return 0;
             }
+        }
+
+        // Modular Machinery (CE) controllers: restricted-tick anti-acceleration
+        // blocks update() spam, so compress the recipe duration through MM's own
+        // modifier system instead. One injection per tick, counted once. The
+        // branch is also taken while the feature is disabled so the useless
+        // ITickable update-call path never wastes budget on these machines.
+        if (ModularMachineryAccelerator.isController(targetTE)) {
+            if (TimeBusConfig.mmAccelerationEnabled) {
+                if (ModularMachineryAccelerator.apply(targetTE, speed)) {
+                    return 1;
+                }
+            } else {
+                // Feature switched off: remove any previously injected modifier.
+                ModularMachineryAccelerator.restore(targetTE);
+            }
+            return 0;
         }
 
         if (!(targetTE instanceof net.minecraft.util.ITickable)) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.5
+
+Modular Machinery acceleration, wand fixes and dev-env improvements:
+
+- Time Wand: emptying into the Time Fluid Generator no longer destroys the fluid (the fill is simulated first; output-only tank rejections are a no-op)
+- Time Wand: cell size is now configurable via wandBytes (default 512, 1 byte = 1000 mB)
+- Modular Machinery (CE) acceleration: restricted-tick machines are sped up by compressing the recipe duration in MM's own modifier system instead of calling update() (which their anti-acceleration design blocks); the multiplier follows the bus's speed cards (0 = 2x, 4 = 32x), opt-in via mmAccelerationEnabled, per-batch material/energy cost unchanged
+- Dev environment: CraftTweaker FMLAT entries merged into timebus_at.cfg so CraftTweaker loads under Cleanroom dev + Java 25
+- docs: DEVELOPER.md updated (MM acceleration, config table, dev dependencies)
+
 ## v1.0.4
 
 Code-review fixes and UX improvements:

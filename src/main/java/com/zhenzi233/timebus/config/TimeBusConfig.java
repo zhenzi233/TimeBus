@@ -169,6 +169,18 @@ public class TimeBusConfig {
     })
     @RangeInt(min = 1, max = 1000000)
     public static int wandBatchSize = 16;
+    // --- Modular Machinery Acceleration ---
+
+    @Name("MM Acceleration Enabled")
+    @Comment({
+        "If true, the Time Bus accelerates Modular Machinery (CE) controllers by",
+        "compressing the recipe duration in MM's own modifier system, instead of",
+        "calling update() (which is blocked by the machines' restricted-tick",
+        "anti-acceleration design).",
+        "The multiplier follows the bus's speed cards (0 cards = 2x, 4 cards = 32x",
+        "by default). Default: false"
+    })
+    public static boolean mmAccelerationEnabled = false;
 
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {

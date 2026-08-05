@@ -24,6 +24,8 @@ dependencies {
     modImplementation "mezz.jei:jei_1.12.2:4.16.1.302"
     // AE2 UEL - 通过 CurseMaven 自动下载
     modImplementation "curse.maven:ae2-extended-life-570458:6302098"
+    // Modular Machinery CE (CurseForge 817377) - 运行期软依赖（反射加速，编译期不需要）
+    modRuntimeOnly "curse.maven:modularmachinery-community-edition-817377:7372951"
     // The One Probe
     modImplementation "curse.maven:the-one-probe-245211:2667280"
     // MouseTweaks Unofficial (Cleanroom fork, contains IMTModGuiContainer2)
