@@ -125,6 +125,15 @@ public class TimeBusConfig {
 
     // --- Time Wand ---
 
+    @Name("Wand Cell Size (Bytes)")
+    @Comment({
+        "Storage size of the Time Wand's fluid cell, in AE bytes.",
+        "Each byte holds 1000 mB of Time Fluid (512 bytes = 512,000 mB = 512 buckets by default).",
+        "Default: 512"
+    })
+    @RangeInt(min = 1, max = 1000000000)
+    public static int wandBytes = 512;
+
     @Name("Wand Speed Multipliers")
     @Comment({
         "Per-card speed multipliers for the Time Wand, comma-separated.",

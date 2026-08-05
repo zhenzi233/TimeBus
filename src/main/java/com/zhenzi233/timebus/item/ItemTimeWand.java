@@ -53,7 +53,7 @@ import java.util.List;
 /**
  * Time Wand - a powered storage cell that holds ONLY Time Fluid.
  * Mirrors the Matter Cannon's structure (powered cell), but on the fluid
- * channel: 512 bytes, 1 type, AE-powered. Exposes FLUID_HANDLER_ITEM_CAPABILITY
+ * channel: configurable bytes (default 512), 1 type, AE-powered. Exposes FLUID_HANDLER_ITEM_CAPABILITY
  * so fluid terminals and other Forge-capability consumers can interact with it.
  */
 public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEFluidStack> {
@@ -350,7 +350,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
     @Override
     public int getBytes(final ItemStack cellItem) {
-        return 512;
+        return TimeBusConfig.wandBytes;
     }
 
     @Override

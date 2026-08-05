@@ -78,7 +78,7 @@ src/main/java/com/zhenzi233/timebus/
 
 ## 3. 时间杖（ItemTimeWand）
 
-`AEBasePoweredItem implements IStorageCell<IAEFluidStack>`：512 字节、1 类型、仅存时间流体、AE 供电。
+`AEBasePoweredItem implements IStorageCell<IAEFluidStack>`：可配置字节数（默认 512）、1 类型、仅存时间流体、AE 供电。
 
 ### 3.1 交互
 
@@ -111,6 +111,7 @@ src/main/java/com/zhenzi233/timebus/
 | `capacityWidths` | `1,3,9,15` | 容量卡宽度 |
 | `maxCallsPerTick` | 128 | 工作预算（调用次数/ tick） |
 | `matterBallUnit` / `singularityUnit` / `unitsPerBatch` / `timeFluidPerBatch` | 1/1000/64000/1000 | 发生器换算 |
+| `wandBytes` | `512` | 时间杖存储单元字节数（1 字节 = 1000 mB 时间流体） |
 | `wandSpeedMultipliers` | `2,4,8,16,32` | 时间杖加速卡倍率（独立于总线） |
 | `wandFluidCost` / `wandEnergyCost` | 10 / 1000 | 时间杖单次消耗 |
 | `wandBatchSize` | 16 | 总线批量传输的批次次数 |

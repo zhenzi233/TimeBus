@@ -201,7 +201,17 @@ public class ContainerTimeGenerator extends AEBaseContainer implements IProgress
             if (request == null) {
                 return;
             }
-            final IAEFluidStack taken = cell.extractItems(request, Actionable.MODULATE, src);
+            // Output-only tank: simulate the fill first. If the tank cannot accept
+            // the fluid, return without extracting anything from the wand (extracting
+            // first and then dropping the rejected fluid would destroy it).
+            final int accepted = this.generator.fill(request.getFluidStack(), false);
+            if (accepted <= 0) {
+                return;
+            }
+            // Only extract what the tank accepted, then pour exactly that amount.
+            final IAEFluidStack pourRequest = request.copy();
+            pourRequest.setStackSize(accepted);
+            final IAEFluidStack taken = cell.extractItems(pourRequest, Actionable.MODULATE, src);
             if (taken == null || taken.getStackSize() <= 0) {
                 return;
             }
