@@ -182,6 +182,16 @@ public class TimeBusConfig {
     })
     public static boolean mmAccelerationEnabled = false;
 
+    @Name("Mekanism Acceleration Enabled")
+    @Comment({
+        "If true, the Time Bus accelerates Mekanism CE (1.12) machines by",
+        "calling their public onUpdate() directly (processing logic only,",
+        "no sync-packet/ticker side effects). Energy is drawn from the",
+        "machine's own Mekanism grid; if power runs out the machine simply",
+        "skips ticks. Default: true"
+    })
+    public static boolean mekAccelerationEnabled = true;
+
     // --- Parsed caches for the comma-separated list configs ---
     // The raw strings are parsed once and cached; the cache is invalidated on
     // config change. This keeps hot paths (per-tick speed/width lookups) free

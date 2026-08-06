@@ -76,9 +76,21 @@ src/main/java/com/zhenzi233/timebus/
 1. `AccelerateHelper.getTileKind` 加一个 `instanceof` 分支（照抄现有分支的模式）
 2. 调度门与加速分派共用 `AccelerateHelper.getTileKind(TileEntity)`，新增机器类型只需改这一处，两处不会漂移
 
-调度门当前识别（`TileKind` 枚举）：`CHARGER`、`INSCRIBER`、`MOLECULAR_ASSEMBLER`、`VIBRATION_CHAMBER`、`IO_PORT`、`MM_CONTROLLER`、`ITICKABLE`。
+调度门当前识别（`TileKind` 枚举）：`CHARGER`、`INSCRIBER`、`MOLECULAR_ASSEMBLER`、`VIBRATION_CHAMBER`、`IO_PORT`、`MM_CONTROLLER`、`MEK_MACHINE`、`ITICKABLE`。
 
-> 反加速机器（Mekanism CE / ModularMachinery CE，`TileEntityRestrictedTick` 系列）：`update()` 是 final 且同 tick 去重，连调无效。MM 走配方时长压缩（`ModularMachineryAccelerator` 向 RecipeThread 注入 duration modifier，总消耗不变，倍率跟随总线速度卡：0卡=2x…满配=32x）；Mek 走 `ticksRequired` 字段压缩（待实现）。两类默认关闭，opt-in。
+> 反加速机器：**Modular Machinery（CE）** 的 `TileEntityRestrictedTick` 系列 `update()` 是 final 且同 tick 去重，连调无效，走配方时长压缩（`ModularMachineryAccelerator` 向 RecipeThread 注入 duration modifier，总消耗不变，倍率跟随总线速度卡：0卡=2x…满配=32x），默认关闭 opt-in。~~Mekanism CE 曾被认为同类~~（勘误：MEK:CE 1.12 分支的机器是标准 `ITickable`、无防重入，v1.0.6 已支持，见 §2.5）。
+
+## 2.5 Mekanism CE（1.12 分支）加速（v1.0.6）
+
+Mekanism CE 的 `1.12` 分支（CurseForge 399904，file 7780583，mod 9.12.14）机器是标准 `ITickable`、无防重入设计，理论上可直接走通用 `update()` 分支；但 `TileEntityBasicBlock.update()` 附带 `components.tick()`、GUI 同步包（玩家打开界面时每 tick 全量发送）、`ticker++`（工厂触发邻居通知），高频连调会引发网络风暴。因此**只反射调 public `onUpdate()` × N**（`MekanismAccelerator`）：
+
+- 类判定：`mekanism.common.tile.prefab.TileEntityBasicBlock`（abstract，implements `ITickable`），`isInstance` 覆盖全部机器（普通/高级/工厂）
+- 方法：`onUpdate()`（public abstract，运行时虚分派到各机器实现），`getDeclaredMethod` + 缓存 Method 句柄（实测 javap 验证过该 jar 的签名）
+- 一次调用 = 一次加工 tick（扣 `energyPerTick`、推进 `operatingTicks`、满 `ticksRequired` 出成品）；能量从机器自身 Mek 电网扣，TimeBus 不做跨模组能量转换，供电不足机器自行跳过
+- 配置开关 `mekAccelerationEnabled`（默认 true）；关闭时 `MEK_MACHINE` 分支返回 0，不浪费预算
+- **版本锁定**：反射基于 CE 1.12 分支 9.12.14；升级 Mek 版本需回归验证——与 AE2 内部假设同等级脆弱性
+- **CCL 依赖**：Mek 需要 CodeChickenLib。dev 环境从 Cleanroom 官方 maven 拉 `codechicken:CodeChickenLib:3.3.5`（CCL CRE）。旧版 CCL 3.2.3.358 在非 FG2 dev 环境 `getConfFiles()` 读 null 直接 NPE；3.3.8 起要求 cleanroom ≥ 0.6.6-alpha，与当前 unimined/工具链（0.5.17）不兼容，故锁定 3.3.5（仅要求 cleanroom ≥ 0.3.13-alpha）
+- 分支位置：`AccelerateHelper.runTileUpdates()` 的 `MEK_MACHINE` case（`getTileKind` 在 ITickable 之前判定）
 
 ## 3. 时间杖（ItemTimeWand）
 
@@ -204,7 +216,7 @@ src/main/java/com/zhenzi233/timebus/
 - 构建环境：Gradle 由 `JAVA_HOME`（建议 JDK 17）运行；编译 toolchain 需要 JDK 25，两种注册方式任选：设环境变量 `JDK25`（项目 `gradle.properties` 已启用 `org.gradle.java.installations.fromEnv=JDK25`），或在 `%USERPROFILE%\.gradle\gradle.properties` 写 `org.gradle.java.installations.paths=...`（个人配置，不入库）；不要在本仓库的 gradle.properties 写死本机路径
 - 构建：`gradlew build`（产物在 `build/libs/timebus-1.0.0.jar`）
 - 依赖：AE2 UEL（`curse.maven:ae2-extended-life-570458:6302098`）、JEI、The One Probe
-- 依赖（运行期软依赖）：MMCE（`curse.maven:modularmachinery-community-edition-817377:7372951`，modRuntimeOnly，纯反射调用）；Mek CE 待补
+- 依赖（运行期软依赖）：MMCE（`curse.maven:modularmachinery-community-edition-817377:7372951`，modRuntimeOnly，纯反射调用）；Mekanism CE（`curse.maven:mekanism-ce-399904:7780583`，modRuntimeOnly，纯反射调用 `onUpdate`，见 §2.5）
 - 注意：Cleanroom 的方法名与 MCP 不同（如 `Block.onEntityCollision` 而非 `onEntityCollidedWithBlock`），改动前先在 `F:\AiWork\Mcmod\Git`（AE2 UEL 源码 git 克隆）或运行时 jar 里确认签名
 
 ### 常见坑

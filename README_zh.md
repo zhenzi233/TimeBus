@@ -83,8 +83,7 @@
 
 ## 兼容性
 
-- 目前时间总线与 Mekanism 机器不兼容，暂时无法加速它们。
-- 兼容 Mek 机器是未来版本的计划内容。
+- 时间总线已支持加速 Mekanism CE（1.12 分支）机器：直接推进加工逻辑（public onUpdate()），能量由机器自身 Mek 电网提供，不做跨模组能量转换；可用 `mekAccelerationEnabled` 关闭。
 
 ## 构建
 
