@@ -212,6 +212,7 @@ Mekanism CE 的 `1.12` 分支（CurseForge 399904，file 7780583，mod 9.12.14�
 
 ## 7. 开发环境
 
+- **协作约定**：需要下载外部资源（依赖 jar、工具、源码、在线 API 等）时，先征求项目所有者意见——所有者可能提供本地资源、代理或镜像；正式依赖的增删同样先确认（版本锁定案例见 §2.5）
 - CleanroomLoader `0.5.17-alpha`，Unimined `1.4.26-kappa`，Java 25 toolchain
 - 构建环境：Gradle 由 `JAVA_HOME`（建议 JDK 17）运行；编译 toolchain 需要 JDK 25，两种注册方式任选：设环境变量 `JDK25`（项目 `gradle.properties` 已启用 `org.gradle.java.installations.fromEnv=JDK25`），或在 `%USERPROFILE%\.gradle\gradle.properties` 写 `org.gradle.java.installations.paths=...`（个人配置，不入库）；不要在本仓库的 gradle.properties 写死本机路径
 - 构建：`gradlew build`（产物在 `build/libs/timebus-1.0.0.jar`）
