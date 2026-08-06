@@ -94,17 +94,12 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
     /** Effective speed from the wand's own configuration (independent of the Time Bus). */
     private int getWandSpeed(final ItemStack stack) {
-        try {
-            final String[] parts = TimeBusConfig.wandSpeedMultipliers.split(",");
-            if (parts.length == 0) {
-                return 1;
-            }
-            final int idx = Math.min(getCardCount(stack), parts.length - 1);
-            return Math.max(1, Integer.parseInt(parts[idx].trim()));
-        } catch (NumberFormatException | NullPointerException e) {
-            TimeBus.LOGGER.warn("Invalid wandSpeedMultipliers config: '{}'", TimeBusConfig.wandSpeedMultipliers);
+        final int[] multipliers = TimeBusConfig.getWandSpeedMultipliers();
+        if (multipliers.length == 0) {
             return 1;
         }
+        final int idx = Math.min(getCardCount(stack), multipliers.length - 1);
+        return Math.max(1, multipliers[idx]);
     }
 
     @Override

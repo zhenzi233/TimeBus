@@ -52,6 +52,11 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
 
     private double storedFluid = 0;
 
+    // Empty-input polling throttle: when the input slot is empty, re-check it
+    // every EMPTY_POLL_INTERVAL ticks instead of every tick.
+    private static final int EMPTY_POLL_INTERVAL = 10;
+    private int emptyInputTicks = 0;
+
     // Condenser-style progress in unified "units": 1 Matter Ball = 1 unit,
     // 1 Singularity = singularityUnit (1000) units. Progress is preserved
     // across mode switches because both inputs accumulate into this counter.
@@ -70,6 +75,17 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
         if (this.world == null || this.world.isRemote || this.isInvalid()) {
             return;
         }
+        // Throttle empty-input polling: nothing to do when the slot is empty,
+        // so only re-check it every EMPTY_POLL_INTERVAL ticks. Any real input
+        // resets the counter and processing resumes every tick.
+        if (this.inputSlot.getStackInSlot(0).isEmpty()) {
+            if (++this.emptyInputTicks < EMPTY_POLL_INTERVAL) {
+                return;
+            }
+            this.emptyInputTicks = 0;
+        } else {
+            this.emptyInputTicks = 0;
+        }
         processInput();
     }
 
@@ -85,8 +101,17 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
         if (input.isEmpty()) {
             return;
         }
-        double space = getStorage() - this.storedFluid;
         CondenserOutput mode = (CondenserOutput) this.cm.getSetting(Settings.CONDENSER_OUTPUT);
+
+        // TRASH (destroy) is never selectable from our GUI, but if the mode is
+        // forced externally (NBT / another mod), consume the input instead of
+        // letting it sit in the slot forever.
+        if (mode == CondenserOutput.TRASH) {
+            this.inputSlot.extractItem(0, 1, false);
+            return;
+        }
+
+        double space = getStorage() - this.storedFluid;
 
         double unitValue;
         if (mode == CondenserOutput.MATTER_BALLS && isMatterBall(input)) {
@@ -94,7 +119,7 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
         } else if (mode == CondenserOutput.SINGULARITY && isSingularity(input)) {
             unitValue = TimeBusConfig.singularityUnit;
         } else {
-            // TRASH mode (or mismatched input) consumes nothing - item stays in the slot.
+            // Mismatched input: keep it in the slot so the player can pull it out.
             return;
         }
 

@@ -31,7 +31,6 @@ public abstract class MixinSlotRestrictedInput {
 
     @Unique
     private void timebus$allowParallelCard(ItemStack i, CallbackInfoReturnable<Boolean> cir) {
-        // TEMP DIAG
         if (this.getPlaceableItemType() == SlotRestrictedInput.PlacableItemType.UPGRADES
                 && i != null && i.getItem() instanceof ITimeBusUpgradeModule) {
             cir.setReturnValue(true);

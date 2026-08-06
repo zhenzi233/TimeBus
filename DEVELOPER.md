@@ -67,15 +67,16 @@ src/main/java/com/zhenzi233/timebus/
 - 状态机：`PHASE_SCHEDULE → PHASE_TILE → PHASE_RANDOM`，按方块推进
 - 超出预算的工作顺延到下一 tick（`workActive` 保持），保证服务端 tick 平滑
 - 预算使用量通过 AE2 `@GuiSync` 同步到 GUI 显示
+- 脉冲模式（`SIGNAL_PULSE`）：红石上升沿启动批次并唤醒设备，网格持续 tick 直到批次完成再自动休眠（`isSleeping()` 在批次进行中返回 false，`tickingRequest` 在批次完成后返回 `SLEEP`），大范围加速不再被预算截断挂起
 
 ### 2.4 如何让 TimeBus 加速一种新机器
 
 两处改动：
 
-1. `AccelerateHelper.runTileUpdates` 加一个 `instanceof` 分支（照抄 IOPort/Inscriber 分支的模式）
-2. `PartTimeBus` 的 PHASE_SCHEDULE 调度门加对应 `instanceof`（否则该 tile 会在调度阶段被跳过，预算不涨）
+1. `AccelerateHelper.getTileKind` 加一个 `instanceof` 分支（照抄现有分支的模式）
+2. 调度门与加速分派共用 `AccelerateHelper.getTileKind(TileEntity)`，新增机器类型只需改这一处，两处不会漂移
 
-调度门当前识别：`ITickable`、`TileCharger`、`TileInscriber`、`TileMolecularAssembler`、`TileVibrationChamber`、`TileIOPort`。
+调度门当前识别（`TileKind` 枚举）：`CHARGER`、`INSCRIBER`、`MOLECULAR_ASSEMBLER`、`VIBRATION_CHAMBER`、`IO_PORT`、`MM_CONTROLLER`、`ITICKABLE`。
 
 > 反加速机器（Mekanism CE / ModularMachinery CE，`TileEntityRestrictedTick` 系列）：`update()` 是 final 且同 tick 去重，连调无效。MM 走配方时长压缩（`ModularMachineryAccelerator` 向 RecipeThread 注入 duration modifier，总消耗不变，倍率跟随总线速度卡：0卡=2x…满配=32x）；Mek 走 `ticksRequired` 字段压缩（待实现）。两类默认关闭，opt-in。
 
@@ -107,20 +108,26 @@ src/main/java/com/zhenzi233/timebus/
 
 | 配置 | 默认 | 说明 |
 |---|---|---|
-| `speedMultipliers` | `2,4,8,16,32` | 总线加速卡倍率（第 N 个 = N-1 张卡） |
+| `speedMultipliers` | `"2,4,8,16,32"` | 总线加速卡倍率（逗号分隔字符串，解析一次并缓存，第 N 个 = N-1 张卡） |
 | `idlePower` | 1.0 | 空闲耗电（AE/t） |
 | `powerPerSpeed` | 0.5 | 每速度单位耗电倍率 |
 | `fluidMode` / `fluidName` / `fluidPerTick` / `fluidConsumeMultiplier` / `minFluid` | - | 总线流体消耗模式 |
-| `capacityWidths` | `1,3,9,15` | 容量卡宽度 |
+| `capacityWidths` | `"1,3,9,15"` | 容量卡宽度（逗号分隔字符串，解析一次并缓存） |
 | `maxCallsPerTick` | 128 | 工作预算（调用次数/ tick） |
 | `matterBallUnit` / `singularityUnit` / `unitsPerBatch` / `timeFluidPerBatch` | 1/1000/64000/1000 | 发生器换算 |
 | `wandBytes` | `512` | 时间杖存储单元字节数（1 字节 = 1000 mB 时间流体） |
-| `wandSpeedMultipliers` | `2,4,8,16,32` | 时间杖加速卡倍率（独立于总线） |
+| `wandSpeedMultipliers` | `"2,4,8,16,32"` | 时间杖加速卡倍率（逗号分隔字符串，解析一次并缓存，独立于总线） |
 | `wandFluidCost` / `wandEnergyCost` | 10 / 1000 | 时间杖单次消耗 |
 | `wandBatchSize` | 16 | 总线批量传输的批次次数 |
 | `mmAccelerationEnabled` | false | MM(CE) 配方时长压缩（opt-in，倍率=总线速度卡：0卡=2x…满配=32x，每批总消耗不变） |
 
 配置界面已本地化（`config.timebus.*` lang keys，中英双语）。
+
+### 5.1 配置类型迁移的坑（v1.0.6 教训，踩过一遍）
+
+1. **不要把 String 配置直接改成 int[]**：Forge 1.12.2 `@Config` 虽然支持数组字段，但已存在的旧 cfg 里条目是 `S:"Speed Multipliers"=2,4,8,16,32` 字符串格式；改成数组字段后 Forge 无法从旧字符串条目迁移，字段被读成 null/空数组 → 倍率/宽度**静默退化为 1**（症状：GUI 加速倍率显示 1x，无任何报错）。正确姿势：**保持 String 字段 + 解析一次缓存**（`getSpeedMultipliers()` / `getCapacityWidths()` / `getWandSpeedMultipliers()`），在 `onConfigChanged` 里失效缓存——既兼容旧 cfg，又没有每 tick split+parse 开销
+2. **cfg 文件不会清理已删除的字段**：旧版本遗留的 key（如 `Acceleration Base Multiplier`、`Matter Balls per Batch`）会一直留在 `timebus.cfg` 里。排查配置问题先看 `run/client/config/timebus.cfg` 的实际内容，不要只看代码默认值
+3. **dev 配置目录是 `run/client/config`**（不是 `run/config`）：运行后配置文件在 run 的客户端/服务端子目录下生成，用 `Get-ChildItem -Recurse -Filter "*.cfg"` 才能找到
 
 ## 6. 机器并行卡（Machine Parallel Card）与压印机堆叠支持
 
@@ -194,6 +201,7 @@ src/main/java/com/zhenzi233/timebus/
 ## 7. 开发环境
 
 - CleanroomLoader `0.5.17-alpha`，Unimined `1.4.26-kappa`，Java 25 toolchain
+- 构建环境：Gradle 由 `JAVA_HOME`（建议 JDK 17）运行；编译 toolchain 需要 JDK 25，两种注册方式任选：设环境变量 `JDK25`（项目 `gradle.properties` 已启用 `org.gradle.java.installations.fromEnv=JDK25`），或在 `%USERPROFILE%\.gradle\gradle.properties` 写 `org.gradle.java.installations.paths=...`（个人配置，不入库）；不要在本仓库的 gradle.properties 写死本机路径
 - 构建：`gradlew build`（产物在 `build/libs/timebus-1.0.0.jar`）
 - 依赖：AE2 UEL（`curse.maven:ae2-extended-life-570458:6302098`）、JEI、The One Probe
 - 依赖（运行期软依赖）：MMCE（`curse.maven:modularmachinery-community-edition-817377:7372951`，modRuntimeOnly，纯反射调用）；Mek CE 待补

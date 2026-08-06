@@ -32,6 +32,7 @@ import appeng.util.Platform;
 import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.client.gui.TimeBusGui;
 import com.zhenzi233.timebus.config.TimeBusConfig;
+import com.zhenzi233.timebus.util.AccelerateHelper;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.EnumParticleTypes;
@@ -73,6 +74,12 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     private final ItemStackHandler configInventory = new ItemStackHandler(9);
     private boolean lastRedstone = false;
     private double fluidAccumulator = 0.0;
+    // Cached fluid-mode lookups. A registered fluid never changes at runtime,
+    // so the lookup is done once and re-resolved only when the config name
+    // changes (checked cheaply every call).
+    private String cachedFluidName = null;
+    private Fluid cachedFluid = null;
+    private IFluidStorageChannel cachedFluidChannel = null;
     private final IActionSource machineSource = new IActionSource() {
         @Override public Optional<EntityPlayer> player() { return Optional.empty(); }
         @Override public Optional<IActionHost> machine() { return Optional.of(PartTimeBus.this); }
@@ -119,15 +126,12 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public int getEffectiveSpeed() {
-        try {
-            String[] parts = TimeBusConfig.speedMultipliers.split(",");
-            if (parts.length == 0) return 1;
-            int idx = Math.min(getCardCount(), parts.length - 1);
-            return Math.max(1, Integer.parseInt(parts[idx].trim()));
-        } catch (NumberFormatException | NullPointerException e) {
-            TimeBus.LOGGER.warn("Invalid speedMultipliers config: '{}'", TimeBusConfig.speedMultipliers);
+        int[] multipliers = TimeBusConfig.getSpeedMultipliers();
+        if (multipliers.length == 0) {
             return 1;
         }
+        int idx = Math.min(getCardCount(), multipliers.length - 1);
+        return Math.max(1, multipliers[idx]);
     }
 
     private int getTotalUpgrades() {
@@ -152,14 +156,23 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public int getCapacityWidth() {
-        try {
-            String[] parts = TimeBusConfig.capacityWidths.split(",");
-            if (parts.length == 0) return 1;
-            int idx = Math.min(this.getInstalledUpgrades(Upgrades.CAPACITY), parts.length - 1);
-            return Math.max(1, Integer.parseInt(parts[idx].trim()));
-        } catch (NumberFormatException | NullPointerException e) {
-            TimeBus.LOGGER.warn("Invalid capacityWidths config: '{}'", TimeBusConfig.capacityWidths);
+        int[] widths = TimeBusConfig.getCapacityWidths();
+        if (widths.length == 0) {
             return 1;
+        }
+        int idx = Math.min(this.getInstalledUpgrades(Upgrades.CAPACITY), widths.length - 1);
+        return Math.max(1, widths[idx]);
+    }
+
+    /** True when the redstone upgrade is installed and set to pulse mode. */
+    private boolean isPulseMode() {
+        if (this.getInstalledUpgrades(Upgrades.REDSTONE) <= 0) {
+            return false;
+        }
+        try {
+            return getRSMode() == RedstoneMode.SIGNAL_PULSE;
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -186,7 +199,9 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             case LOW_SIGNAL:
                 return hasSignal;
             case SIGNAL_PULSE:
-                return true;
+                // Stay awake while a batch is still in progress; sleep once the
+                // pulse-triggered work has fully finished (see tickingRequest).
+                return !workActive;
             default:
                 return false;
         }
@@ -194,7 +209,17 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
     @Override
     public void onNeighborChanged(IBlockAccess world, BlockPos pos, BlockPos neighbor) {
-        // Sync sleep state with tick manager (PartSharedItemBus pattern)
+        // Track redstone changes first: in pulse mode a rising edge starts a
+        // batch, so the device must already be awake when we sync its sleep
+        // state below (otherwise the freshly started batch would stay asleep).
+        boolean hasSignal = getHost().hasRedstone(getSide());
+        if (hasSignal != this.lastRedstone) {
+            this.lastRedstone = hasSignal;
+            if (hasSignal && getRSMode() == RedstoneMode.SIGNAL_PULSE) {
+                doWork();
+            }
+        }
+        // Sync sleep state with tick manager (PartSharedItemBus pattern).
         try {
             if (!isSleeping()) {
                 this.getProxy().getTick().wakeDevice(this.getProxy().getNode());
@@ -202,14 +227,6 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 this.getProxy().getTick().sleepDevice(this.getProxy().getNode());
             }
         } catch (appeng.me.GridAccessException ignored) {
-        }
-        // Track redstone changes
-        boolean hasSignal = getHost().hasRedstone(getSide());
-        if (hasSignal != this.lastRedstone) {
-            this.lastRedstone = hasSignal;
-            if (hasSignal && getRSMode() == RedstoneMode.SIGNAL_PULSE) {
-                doWork();
-            }
         }
     }
 
@@ -241,6 +258,12 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         }
         extractAEPower(ticksSinceLastCall);
         doWork();
+        // Pulse mode: the device is only kept awake while a batch is still in
+        // progress. As soon as it finishes, go back to sleep so the grid does
+        // not keep polling an idle bus; the next redstone edge wakes it again.
+        if (isPulseMode() && !workActive) {
+            return TickRateModulation.SLEEP;
+        }
         // Back off when nothing real happened for a while (no blocks in range,
         // no fluid, ...) so an idle bus stops scanning every tick. Any actual
         // work or an unfinished batch resets the counter.
@@ -280,6 +303,16 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 break;
             }
             BlockPos target = start.offset(facing.getFacing(), workBlockIndex);
+            // Cheap per-block loaded check: getBlockState on an unloaded chunk
+            // forces a synchronous disk load (tick hitch on chunk borders).
+            // Unloaded targets are skipped for this batch; the next batch
+            // re-checks them once their chunk has loaded.
+            if (!world.isBlockLoaded(target)) {
+                workBlockIndex++;
+                workPhase = PHASE_SCHEDULE;
+                workPhaseRemaining = 0;
+                continue;
+            }
             IBlockState targetState = world.getBlockState(target);
             Block targetBlock = targetState.getBlock();
 
@@ -296,7 +329,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     }
                     used++;
                     TileEntity targetTE = world.getTileEntity(target);
-                    if (targetTE instanceof ITickable || targetTE instanceof appeng.tile.misc.TileCharger || targetTE instanceof appeng.tile.misc.TileInscriber || targetTE instanceof appeng.tile.crafting.TileMolecularAssembler || targetTE instanceof appeng.tile.misc.TileVibrationChamber || targetTE instanceof appeng.tile.storage.TileIOPort) {
+                    if (AccelerateHelper.getTileKind(targetTE) != AccelerateHelper.TileKind.NONE) {
                         workPhase = PHASE_TILE;
                         workPhaseRemaining = Math.max(0, speed - 1);
                         if (workPhaseRemaining == 0) {
@@ -309,7 +342,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 }
                 case PHASE_TILE: {
                     int n = Math.min(workPhaseRemaining, budget - used);
-                    n = com.zhenzi233.timebus.util.AccelerateHelper.runTileUpdates(world, target, n, speed);
+                    n = AccelerateHelper.runTileUpdates(world, target, n, speed);
                     used += n;
                     if (n > 0) {
                         workDidSomething = true;
@@ -326,7 +359,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 }
                 case PHASE_RANDOM: {
                     int n = Math.min(workPhaseRemaining, budget - used);
-                    n = com.zhenzi233.timebus.util.AccelerateHelper.runRandomTicks(world, target, targetState, targetBlock, n);
+                    n = AccelerateHelper.runRandomTicks(world, target, targetState, targetBlock, n);
                     used += n;
                     if (n > 0) {
                         workDidSomething = true;
@@ -384,12 +417,18 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             fluidAccumulator -= toDrain;
 
             IStorageGrid storage = this.getProxy().getStorage();
-            IFluidStorageChannel fluidChannel = AEApi.instance().storage()
-                    .getStorageChannel(IFluidStorageChannel.class);
-            IMEMonitor<IAEFluidStack> fluidInv = storage.getInventory(fluidChannel);
+            if (cachedFluid == null || !TimeBusConfig.fluidName.equals(cachedFluidName)) {
+                cachedFluidName = TimeBusConfig.fluidName;
+                cachedFluid = FluidRegistry.getFluid(cachedFluidName);
+                cachedFluidChannel = AEApi.instance().storage()
+                        .getStorageChannel(IFluidStorageChannel.class);
+            }
+            if (cachedFluid == null) {
+                return false;
+            }
+            IMEMonitor<IAEFluidStack> fluidInv = storage.getInventory(cachedFluidChannel);
 
-            Fluid fluid = FluidRegistry.getFluid(TimeBusConfig.fluidName);
-            if (fluid == null) return false;
+            Fluid fluid = cachedFluid;
 
             // Check minimum threshold
             IAEFluidStack minCheck = AEFluidStack.fromFluidStack(
@@ -401,7 +440,18 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             IAEFluidStack toConsume = AEFluidStack.fromFluidStack(
                     new FluidStack(fluid, toDrain));
             IAEFluidStack extracted = fluidInv.extractItems(toConsume, Actionable.MODULATE, machineSource);
-            return extracted != null && extracted.getStackSize() > 0;
+            if (extracted == null) {
+                // Nothing was drained (simulate passed but modulate lost the
+                // race): put the amount back instead of losing it.
+                fluidAccumulator += toDrain;
+                return false;
+            }
+            long actualDrained = extracted.getStackSize();
+            // Keep the books aligned with reality: if the network only had
+            // part of the requested amount, carry the difference to the next
+            // tick instead of silently billing more than was drained.
+            fluidAccumulator += toDrain - actualDrained;
+            return actualDrained > 0;
         } catch (GridAccessException e) {
             return false;
         }

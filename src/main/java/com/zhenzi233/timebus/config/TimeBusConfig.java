@@ -182,12 +182,70 @@ public class TimeBusConfig {
     })
     public static boolean mmAccelerationEnabled = false;
 
+    // --- Parsed caches for the comma-separated list configs ---
+    // The raw strings are parsed once and cached; the cache is invalidated on
+    // config change. This keeps hot paths (per-tick speed/width lookups) free
+    // of split+parse while staying fully compatible with existing cfg files
+    // (an int[] field would fail to migrate an old string-typed config entry).
+    private static int[] cachedSpeedMultipliers = null;
+    private static int[] cachedCapacityWidths = null;
+    private static int[] cachedWandSpeedMultipliers = null;
+
+    public static int[] getSpeedMultipliers() {
+        if (cachedSpeedMultipliers == null) {
+            cachedSpeedMultipliers = parseList(speedMultipliers, new int[]{2, 4, 8, 16, 32});
+        }
+        return cachedSpeedMultipliers;
+    }
+
+    public static int[] getCapacityWidths() {
+        if (cachedCapacityWidths == null) {
+            cachedCapacityWidths = parseList(capacityWidths, new int[]{1, 3, 9, 15});
+        }
+        return cachedCapacityWidths;
+    }
+
+    public static int[] getWandSpeedMultipliers() {
+        if (cachedWandSpeedMultipliers == null) {
+            cachedWandSpeedMultipliers = parseList(wandSpeedMultipliers, new int[]{2, 4, 8, 16, 32});
+        }
+        return cachedWandSpeedMultipliers;
+    }
+
+    /** Parse a comma-separated int list; fall back to {@code defaults} on bad input. */
+    private static int[] parseList(final String raw, final int[] defaults) {
+        if (raw == null || raw.trim().isEmpty()) {
+            return defaults;
+        }
+        final String[] parts = raw.split(",");
+        if (parts.length == 0) {
+            return defaults;
+        }
+        try {
+            final int[] out = new int[parts.length];
+            for (int i = 0; i < parts.length; i++) {
+                out[i] = Integer.parseInt(parts[i].trim());
+            }
+            return out;
+        } catch (NumberFormatException e) {
+            TimeBus.LOGGER.warn("Time Bus: invalid numeric list in config '{}', using defaults", raw);
+            return defaults;
+        }
+    }
+
+    private static void invalidateCaches() {
+        cachedSpeedMultipliers = null;
+        cachedCapacityWidths = null;
+        cachedWandSpeedMultipliers = null;
+    }
+
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {
         @SubscribeEvent
         public static void onConfigChanged(ConfigChangedEvent.OnConfigChangedEvent event) {
             if (event.getModID().equals(TimeBus.MOD_ID)) {
                 ConfigManager.sync(TimeBus.MOD_ID, Config.Type.INSTANCE);
+                invalidateCaches();
             }
         }
     }

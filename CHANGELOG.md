@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.0.6
+
+Code-review fixes (14-item review of v1.0.5):
+
+- Time Bus: pulse mode no longer truncates large acceleration batches - the
+  device stays awake until the whole batch finishes, then sleeps again, so a
+  single redstone pulse completes a fully-upgraded run instead of ~1%
+- Time Bus: fluid billing is now aligned with what was actually drained
+  (partial extraction carries the remainder over instead of silently
+  over-billing)
+- Time Bus: unloaded chunks in the acceleration range are skipped cheaply
+  instead of forcing synchronous disk loads on chunk borders
+- Time Bus: per-tick config string parsing removed - speedMultipliers,
+  capacityWidths and wandSpeedMultipliers are parsed once and cached
+  (invalidated on config change); kept as strings so existing cfg files
+  migrate cleanly
+- Time Bus: fluid and storage-channel lookups in fluid mode are cached and
+  re-resolved only when the configured fluid name changes
+- Time Generator: an empty input slot is polled every 10 ticks instead of
+  every tick; TRASH mode (if forced externally) consumes the input instead of
+  leaving it stuck in the slot
+- Acceleration: AE2 machine classification unified into AccelerateHelper's
+  TileKind, so the bus scheduling gate and the update dispatcher can never
+  drift apart
+- Mixins: removed the dead TimeBusMixinConfigPlugin and leftover TEMP DIAG
+  comments
+- Build: removed hardcoded local JDK paths from gradle.properties (JAVA_HOME
+  for Gradle 17, JDK25 env var for the compile toolchain); disabled the unused
+  JUnit test configuration
+
 ## v1.0.5
 
 Modular Machinery acceleration, wand fixes and dev-env improvements:
