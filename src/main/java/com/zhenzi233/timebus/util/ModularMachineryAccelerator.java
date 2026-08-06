@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Modular Machinery (CE) recipe-duration accelerator.
@@ -57,7 +58,13 @@ public final class ModularMachineryAccelerator {
     private static volatile boolean available;
 
     private static volatile Class<?> controllerClass;
-    private static volatile Method getRecipeThreadList;
+    /**
+     * getRecipeThreadList is declared separately on the concrete controller
+     * classes (TileMachineController and TileFactoryController), not on the
+     * shared base, so it must be resolved from the actual tile class at
+     * runtime and cached per class.
+     */
+    private static final Map<Class<?>, Method> GET_RECIPE_THREAD_LIST = new ConcurrentHashMap<>();
     private static volatile Method getPermanentModifiers;
     private static volatile Method getModifier;
     private static volatile Method addPermanentModifier;
@@ -100,8 +107,19 @@ public final class ModularMachineryAccelerator {
         final float target = 1.0f / accelerate;
         boolean touched = false;
         try {
-            final Object[] threads = (Object[]) getRecipeThreadList.invoke(te);
+            final Method threadsGetter = getRecipeThreadListFor(te);
+            if (threadsGetter == null) {
+                return false;
+            }
+            final Object[] threads = (Object[]) threadsGetter.invoke(te);
             if (threads == null) {
+                return false;
+            }
+            if (threads.length == 0) {
+                // 工厂机器没有核心线程（CraftTweaker 未配置 addCoreThread）时线程列表为空，
+                // 这是机器配置问题而非错误；用 debug 级别避免每个 tick 刷屏。
+                TimeBus.LOGGER.debug("Time Bus: MM controller {} ({}) has no recipe threads",
+                        te.getPos(), te.getClass().getSimpleName());
                 return false;
             }
             for (final Object thread : threads) {
@@ -119,12 +137,36 @@ public final class ModularMachineryAccelerator {
             }
             if (touched) {
                 rememberInjected(te, sourceKey);
+                TimeBus.LOGGER.info("Time Bus: MM applied source={} speed={} at {} ({} threads, tile {})",
+                        sourceKey, accelerate, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
             return touched;
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: MM acceleration failed at {}: {}", te.getPos(), e.toString());
             return false;
         }
+    }
+
+    /**
+     * Resolve getRecipeThreadList from the actual tile class, walking up the
+     * hierarchy until a declaration is found (TileMachineController and
+     * TileFactoryController each declare their own copy).
+     */
+    private static Method getRecipeThreadListFor(final TileEntity te) {
+        if (te == null) {
+            return null;
+        }
+        return GET_RECIPE_THREAD_LIST.computeIfAbsent(te.getClass(), clazz -> {
+            Class<?> current = clazz;
+            while (current != null) {
+                try {
+                    return current.getDeclaredMethod("getRecipeThreadList");
+                } catch (NoSuchMethodException e) {
+                    current = current.getSuperclass();
+                }
+            }
+            return null;
+        });
     }
 
     /** True if {@code thread} already carries exactly {@code target} under {@code key}. */
@@ -150,14 +192,24 @@ public final class ModularMachineryAccelerator {
         }
         final String key = keyFor(sourceKey);
         try {
-            final Object[] threads = (Object[]) getRecipeThreadList.invoke(te);
+            final Method threadsGetter = getRecipeThreadListFor(te);
+            if (threadsGetter == null) {
+                return;
+            }
+            final Object[] threads = (Object[]) threadsGetter.invoke(te);
             if (threads == null) {
                 return;
             }
+            int removed = 0;
             for (final Object thread : threads) {
                 if (thread != null) {
                     removePermanentModifier.invoke(thread, key);
+                    removed++;
                 }
+            }
+            if (removed > 0) {
+                TimeBus.LOGGER.info("Time Bus: MM restored source={} at {} ({} threads, tile {})",
+                        sourceKey, te.getPos(), removed, te.getClass().getSimpleName());
             }
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: MM restore failed at {}: {}", te.getPos(), e.toString());
@@ -215,11 +267,6 @@ public final class ModularMachineryAccelerator {
                 final Class<?> ioTypeClass = Class.forName(
                         "hellfirepvp.modularmachinery.common.machine.IOType");
 
-                // getRecipeThreadList is declared on the concrete controller classes
-                // (TileMachineController / TileFactoryController), not on the base.
-                getRecipeThreadList = Class.forName(
-                        "hellfirepvp.modularmachinery.common.tiles.TileMachineController")
-                        .getMethod("getRecipeThreadList");
                 getPermanentModifiers = recipeThreadClass.getMethod("getPermanentModifiers");
                 getModifier = modifierClass.getMethod("getModifier");
                 addPermanentModifier = recipeThreadClass.getMethod(
