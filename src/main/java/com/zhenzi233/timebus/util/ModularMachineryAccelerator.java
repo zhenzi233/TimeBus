@@ -2,10 +2,16 @@ package com.zhenzi233.timebus.util;
 
 import com.zhenzi233.timebus.TimeBus;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
@@ -34,18 +40,26 @@ public final class ModularMachineryAccelerator {
     private ModularMachineryAccelerator() {
     }
 
-    /** Modifier key used for the duration compression (namespaced to avoid collisions). */
-    private static final String MODIFIER_KEY = "timebus_duration_accel";
+    /** Modifier key prefix for the duration compression (namespaced to avoid collisions). */
+    private static final String MODIFIER_KEY_PREFIX = "timebus_duration_accel";
 
-    /** Remembers the multiplier injected per recipe thread, so a config change re-applies. */
-    private static final WeakHashMap<Object, Integer> INJECTED = new WeakHashMap<>();
+    /**
+     * Remembers which source (Time Bus part / wand) injected a duration modifier
+     * on which controller, so {@link #restoreAllForSource} can clean up when a
+     * source disappears (e.g. a Time Bus is removed from the world). Without
+     * this, injected modifiers would stay on machines forever and even be
+     * written into the world save. World keys are weak references: entries go
+     * away automatically when the World unloads.
+     */
+    private static final Map<World, Map<BlockPos, Set<String>>> INJECTED = new WeakHashMap<>();
 
     private static volatile boolean resolved;
     private static volatile boolean available;
 
     private static volatile Class<?> controllerClass;
     private static volatile Method getRecipeThreadList;
-    private static volatile Method hasPermanentModifier;
+    private static volatile Method getPermanentModifiers;
+    private static volatile Method getModifier;
     private static volatile Method addPermanentModifier;
     private static volatile Method removePermanentModifier;
     private static volatile Constructor<?> recipeModifierCtor;
@@ -63,12 +77,18 @@ public final class ModularMachineryAccelerator {
 
     /**
      * Compress the recipe duration of every recipe thread on the controller by
-     * {@code accelerate}. Idempotent: each thread is touched at most once per
-     * multiplier; if the multiplier changes, the old modifier is replaced.
+     * {@code accelerate}, under the per-source key derived from
+     * {@code sourceKey}. Multiple sources (e.g. several Time Buses aimed at
+     * the same controller) each get their own multiplier, and MM multiplies
+     * all of them together, so the total speed-up stacks: the recipe runs
+     * {@code (1 / speed_1) * (1 / speed_2) * ...} as fast.
+     *
+     * <p>Idempotent per (thread, source): re-applying the same multiplier
+     * skips, a different multiplier replaces this source's own modifier only.
      *
      * @return true if at least one thread was touched
      */
-    public static boolean apply(final TileEntity te, final int accelerate) {
+    public static boolean apply(final TileEntity te, final String sourceKey, final int accelerate) {
         if (te == null || accelerate <= 1) {
             return false;
         }
@@ -76,6 +96,8 @@ public final class ModularMachineryAccelerator {
         if (!available) {
             return false;
         }
+        final String key = keyFor(sourceKey);
+        final float target = 1.0f / accelerate;
         boolean touched = false;
         try {
             final Object[] threads = (Object[]) getRecipeThreadList.invoke(te);
@@ -86,17 +108,17 @@ public final class ModularMachineryAccelerator {
                 if (thread == null) {
                     continue;
                 }
-                final Integer current = currentInjected(thread);
-                if (current != null && current.intValue() == accelerate
-                        && (Boolean) hasPermanentModifier.invoke(thread, MODIFIER_KEY)) {
+                if (hasExactModifier(thread, key, target)) {
                     continue; // already injected with this multiplier
                 }
-                removePermanentModifier.invoke(thread, MODIFIER_KEY);
+                removePermanentModifier.invoke(thread, key);
                 final Object modifier = recipeModifierCtor.newInstance(null, ioInput,
-                        1.0f / accelerate, operationMultiply, false);
-                addPermanentModifier.invoke(thread, MODIFIER_KEY, modifier);
-                rememberInjected(thread, accelerate);
+                        target, operationMultiply, false);
+                addPermanentModifier.invoke(thread, key, modifier);
                 touched = true;
+            }
+            if (touched) {
+                rememberInjected(te, sourceKey);
             }
             return touched;
         } catch (Exception e) {
@@ -105,8 +127,20 @@ public final class ModularMachineryAccelerator {
         }
     }
 
-    /** Remove the injected modifier again (immediate restore of the original duration). */
-    public static void restore(final TileEntity te) {
+    /** True if {@code thread} already carries exactly {@code target} under {@code key}. */
+    private static boolean hasExactModifier(final Object thread, final String key, final float target) throws Exception {
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> permanent = (Map<String, Object>) getPermanentModifiers.invoke(thread);
+        final Object existing = permanent.get(key);
+        return existing != null && Math.abs((Float) getModifier.invoke(existing) - target) < 1e-4f;
+    }
+
+    private static String keyFor(final String sourceKey) {
+        return MODIFIER_KEY_PREFIX + ":" + (sourceKey == null ? "unknown" : sourceKey);
+    }
+
+    /** Remove this source's injected modifier again (immediate restore of the original duration). */
+    public static void restore(final TileEntity te, final String sourceKey) {
         if (te == null) {
             return;
         }
@@ -114,6 +148,7 @@ public final class ModularMachineryAccelerator {
         if (!available) {
             return;
         }
+        final String key = keyFor(sourceKey);
         try {
             final Object[] threads = (Object[]) getRecipeThreadList.invoke(te);
             if (threads == null) {
@@ -121,12 +156,42 @@ public final class ModularMachineryAccelerator {
             }
             for (final Object thread : threads) {
                 if (thread != null) {
-                    removePermanentModifier.invoke(thread, MODIFIER_KEY);
-                    forgetInjected(thread);
+                    removePermanentModifier.invoke(thread, key);
                 }
             }
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: MM restore failed at {}: {}", te.getPos(), e.toString());
+        } finally {
+            forgetInjected(te, sourceKey);
+        }
+    }
+
+    /**
+     * Remove every modifier injected by {@code sourceKey} on any controller in
+     * {@code world}. Called when the source goes away (Time Bus removed from
+     * the world), so machines are not left permanently accelerated.
+     */
+    public static void restoreAllForSource(final World world, final String sourceKey) {
+        if (world == null || sourceKey == null) {
+            return;
+        }
+        resolve();
+        if (!available) {
+            return;
+        }
+        final Set<BlockPos> positions;
+        synchronized (INJECTED) {
+            final Map<BlockPos, Set<String>> byPos = INJECTED.get(world);
+            positions = byPos == null ? java.util.Collections.emptySet() : new HashSet<>(byPos.keySet());
+        }
+        for (final BlockPos pos : positions) {
+            if (!world.isBlockLoaded(pos)) {
+                continue;
+            }
+            final TileEntity te = world.getTileEntity(pos);
+            if (te != null) {
+                restore(te, sourceKey);
+            }
         }
     }
 
@@ -155,7 +220,8 @@ public final class ModularMachineryAccelerator {
                 getRecipeThreadList = Class.forName(
                         "hellfirepvp.modularmachinery.common.tiles.TileMachineController")
                         .getMethod("getRecipeThreadList");
-                hasPermanentModifier = recipeThreadClass.getMethod("hasPermanentModifier", String.class);
+                getPermanentModifiers = recipeThreadClass.getMethod("getPermanentModifiers");
+                getModifier = modifierClass.getMethod("getModifier");
                 addPermanentModifier = recipeThreadClass.getMethod(
                         "addPermanentModifier", String.class, modifierClass);
                 removePermanentModifier = recipeThreadClass.getMethod("removePermanentModifier", String.class);
@@ -175,21 +241,36 @@ public final class ModularMachineryAccelerator {
         }
     }
 
-    private static Integer currentInjected(final Object thread) {
+    private static void rememberInjected(final TileEntity te, final String sourceKey) {
+        if (te == null || sourceKey == null) {
+            return;
+        }
         synchronized (INJECTED) {
-            return INJECTED.get(thread);
+            INJECTED.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
+                    .computeIfAbsent(te.getPos(), p -> new HashSet<>())
+                    .add(sourceKey);
         }
     }
 
-    private static void rememberInjected(final Object thread, final int accelerate) {
-        synchronized (INJECTED) {
-            INJECTED.put(thread, accelerate);
+    private static void forgetInjected(final TileEntity te, final String sourceKey) {
+        if (te == null || sourceKey == null) {
+            return;
         }
-    }
-
-    private static void forgetInjected(final Object thread) {
         synchronized (INJECTED) {
-            INJECTED.remove(thread);
+            final Map<BlockPos, Set<String>> byPos = INJECTED.get(te.getWorld());
+            if (byPos == null) {
+                return;
+            }
+            final Set<String> sources = byPos.get(te.getPos());
+            if (sources != null) {
+                sources.remove(sourceKey);
+                if (sources.isEmpty()) {
+                    byPos.remove(te.getPos());
+                }
+            }
+            if (byPos.isEmpty()) {
+                INJECTED.remove(te.getWorld());
+            }
         }
     }
 }

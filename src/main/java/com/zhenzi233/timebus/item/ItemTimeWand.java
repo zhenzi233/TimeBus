@@ -155,7 +155,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
         // Accelerate the target block once. (Particles are rendered by the
         // client branch of onItemUse.)
-        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack));
+        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack), "wand");
         return EnumActionResult.SUCCESS;
     }
     /**

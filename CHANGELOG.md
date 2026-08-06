@@ -17,6 +17,10 @@ Mekanism CE acceleration (added after the code-review fixes):
   an NPE on non-FG2 dev environments, so CCL CRE 3.3.5 is pulled from
   Cleanroom's official maven (3.3.8+ requires cleanroom >= 0.6.6-alpha,
   incompatible with the current 0.5.17 toolchain; 3.3.5 only needs 0.3.13+)
+- MM acceleration now stacks: each Time Bus / wand injects its own per-source
+  duration modifier, and MM multiplies them together (8x + 4x = 32x); removing
+  a bus restores its modifier (previously it stayed on the machine and was
+  even saved into the world save)
 - dev toolchain: fixed a Groovy quirk in runClient extra JVM args handling
   (`split { "\\s+" }` coerced the result into a char list and corrupted the
   javaagent command line)

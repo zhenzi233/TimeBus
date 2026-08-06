@@ -42,7 +42,7 @@ src/main/java/com/zhenzi233/timebus/
 
 每个动作 try/catch 隔离，单个坏方块不会毁掉整批。
 
-### 2.2 Tile 加速分派 `runTileUpdates(world, target, n, speed)`
+### 2.2 Tile 加速分派 `runTileUpdates(world, target, n, speed, sourceKey)`
 
 按 tile 类型分派（**顺序很重要**）：
 
@@ -79,6 +79,8 @@ src/main/java/com/zhenzi233/timebus/
 调度门当前识别（`TileKind` 枚举）：`CHARGER`、`INSCRIBER`、`MOLECULAR_ASSEMBLER`、`VIBRATION_CHAMBER`、`IO_PORT`、`MM_CONTROLLER`、`MEK_MACHINE`、`ITICKABLE`。
 
 > 反加速机器：**Modular Machinery（CE）** 的 `TileEntityRestrictedTick` 系列 `update()` 是 final 且同 tick 去重，连调无效，走配方时长压缩（`ModularMachineryAccelerator` 向 RecipeThread 注入 duration modifier，总消耗不变，倍率跟随总线速度卡：0卡=2x…满配=32x），默认关闭 opt-in。~~Mekanism CE 曾被认为同类~~（勘误：MEK:CE 1.12 分支的机器是标准 `ITickable`、无防重入，v1.0.6 已支持，见 §2.5）。
+>
+> **多总线叠加（v1.0.6）**：每个加速源（时间总线 / 时间杖）用独立 modifier key（`timebus_duration_accel:<源>`，总线源 = 自身方块坐标），MM 对多个乘算 modifier 连乘，总倍率 = 各总线速度的**乘积**（如 8x + 4x = 32x），同速总线幂等不重复注入。`sourceKey` 由调用方传入 `runTileUpdates/accelerateOnce`。**拆除清理**：时间总线被移除时 `removeFromWorld()` 调 `ModularMachineryAccelerator.restoreAllForSource` 恢复自己注入过的所有控制器（内部用 WeakHashMap 登记 源→(控制器位置,key)），避免 modifier 残留并写进存档。
 
 ## 2.5 Mekanism CE（1.12 分支）加速（v1.0.6）
 

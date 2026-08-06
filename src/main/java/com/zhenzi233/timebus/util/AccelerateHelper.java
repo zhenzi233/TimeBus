@@ -81,8 +81,14 @@ public final class AccelerateHelper {
         return TileKind.NONE;
     }
 
-    /** Perform one full acceleration burst on the block at {@code pos}. */
-    public static void accelerateOnce(final World world, final BlockPos pos, final int speed) {
+    /**
+     * Perform one full acceleration burst on the block at {@code pos}.
+     *
+     * @param sourceKey identifies the accelerating source (Time Bus / wand) so
+     *                  MM recipe-duration modifiers stack per source instead of
+     *                  overwriting each other
+     */
+    public static void accelerateOnce(final World world, final BlockPos pos, final int speed, final String sourceKey) {
         if (world == null || pos == null || speed <= 0) {
             return;
         }
@@ -96,7 +102,7 @@ public final class AccelerateHelper {
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: scheduleBlockUpdate failed at {}: {}", pos, e.toString());
         }
-        runTileUpdates(world, pos, Math.max(0, speed - 1), speed);
+        runTileUpdates(world, pos, Math.max(0, speed - 1), speed, sourceKey);
         runRandomTicks(world, pos, state, block, speed * 20);
     }
 
@@ -108,7 +114,8 @@ public final class AccelerateHelper {
      *
      * @return how many calls actually ran
      */
-    public static int runTileUpdates(final World world, final BlockPos target, final int n, final int speed) {
+    public static int runTileUpdates(final World world, final BlockPos target, final int n, final int speed,
+                                     final String sourceKey) {
         if (n <= 0 || world == null || target == null) {
             return 0;
         }
@@ -204,12 +211,12 @@ public final class AccelerateHelper {
             // ITickable update-call path never wastes budget on these machines.
             case MM_CONTROLLER: {
                 if (TimeBusConfig.mmAccelerationEnabled) {
-                    if (ModularMachineryAccelerator.apply(targetTE, speed)) {
+                    if (ModularMachineryAccelerator.apply(targetTE, sourceKey, speed)) {
                         return 1;
                     }
                 } else {
-                    // Feature switched off: remove any previously injected modifier.
-                    ModularMachineryAccelerator.restore(targetTE);
+                    // Feature switched off: remove this source's injected modifier.
+                    ModularMachineryAccelerator.restore(targetTE, sourceKey);
                 }
                 return 0;
             }

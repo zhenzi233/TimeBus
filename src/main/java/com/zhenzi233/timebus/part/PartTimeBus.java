@@ -33,6 +33,7 @@ import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.client.gui.TimeBusGui;
 import com.zhenzi233.timebus.config.TimeBusConfig;
 import com.zhenzi233.timebus.util.AccelerateHelper;
+import com.zhenzi233.timebus.util.ModularMachineryAccelerator;
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.EnumParticleTypes;
@@ -123,6 +124,25 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
     private int getCardCount() {
         return this.getInstalledUpgrades(Upgrades.SPEED);
+    }
+
+    /** Stable per-part identity used as the MM duration-modifier source key. */
+    private String getSourceKey() {
+        if (getHost() == null || getHost().getTile() == null) {
+            return "bus:unknown";
+        }
+        final BlockPos pos = getHost().getTile().getPos();
+        return "bus:" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    @Override
+    public void removeFromWorld() {
+        // 拆除时间总线时，恢复本总线注入过的 MM 配方时长 modifier，
+        // 否则机器会一直保持加速且 modifier 还会被写进存档（跨存档残留）。
+        if (getHost() != null && getHost().getTile() != null) {
+            ModularMachineryAccelerator.restoreAllForSource(getHost().getTile().getWorld(), getSourceKey());
+        }
+        super.removeFromWorld();
     }
 
     public int getEffectiveSpeed() {
@@ -296,6 +316,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         AEPartLocation facing = this.getSide();
         net.minecraft.world.World world = getHost().getTile().getWorld();
         BlockPos start = getHost().getTile().getPos().offset(facing.getFacing());
+        final String sourceKey = getSourceKey();
 
         while (used < budget && workActive) {
             if (workBlockIndex >= width) {
@@ -342,7 +363,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 }
                 case PHASE_TILE: {
                     int n = Math.min(workPhaseRemaining, budget - used);
-                    n = AccelerateHelper.runTileUpdates(world, target, n, speed);
+                    n = AccelerateHelper.runTileUpdates(world, target, n, speed, sourceKey);
                     used += n;
                     if (n > 0) {
                         workDidSomething = true;
