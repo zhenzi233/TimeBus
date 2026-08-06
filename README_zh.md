@@ -81,10 +81,6 @@
 - Java 17（Gradle 运行）+ Java 25（编译工具链）
 
 
-## 兼容性
-
-- 时间总线已支持加速 Mekanism CE（1.12 分支）机器：直接推进加工逻辑（public onUpdate()），能量由机器自身 Mek 电网提供，不做跨模组能量转换；可用 `mekAccelerationEnabled` 关闭。
-
 ## 构建
 
 ```bat

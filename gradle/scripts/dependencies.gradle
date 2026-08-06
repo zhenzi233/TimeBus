@@ -30,12 +30,7 @@ dependencies {
     modImplementation "curse.maven:ae2-extended-life-570458:6302098"
     // Modular Machinery CE (CurseForge 817377) - 运行期软依赖（反射加速，编译期不需要）
     modRuntimeOnly "curse.maven:modularmachinery-community-edition-817377:7372951"
-    // Mekanism CE (CurseForge 399904) - 运行期软依赖（反射 onUpdate 加速，编译期不需要）
-    modRuntimeOnly "curse.maven:mekanism-ce-399904:7780583"
-    // CodeChickenLib CRE (Cleanroom 官方维护) - Mek 依赖 CCL，旧版 CCL 在非 FG2 dev 环境崩溃。
-    // 3.3.8 要求 cleanroom >= 0.6.6-alpha，但当前 unimined/工具链只支持 0.5.x，故用 3.3.5
-    // （要求 cleanroom >= 0.3.13-alpha，兼容 0.5.17）。
-    modRuntimeOnly "codechicken:CodeChickenLib:3.3.5"
+
     // The One Probe
     modImplementation "curse.maven:the-one-probe-245211:2667280"
     // MouseTweaks Unofficial (Cleanroom fork, contains IMTModGuiContainer2)

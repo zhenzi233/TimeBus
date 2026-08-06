@@ -44,8 +44,6 @@ public final class AccelerateHelper {
         IO_PORT,
         /** Modular Machinery (CE) controller: recipe-duration compression. */
         MM_CONTROLLER,
-        /** Mekanism CE (1.12) machine: public onUpdate() advancement. */
-        MEK_MACHINE,
         /** Plain ITickable machine: update() spam. */
         ITICKABLE,
         /** Not acceleratable. */
@@ -71,9 +69,6 @@ public final class AccelerateHelper {
         }
         if (ModularMachineryAccelerator.isController(te)) {
             return TileKind.MM_CONTROLLER;
-        }
-        if (MekanismAccelerator.isMachine(te)) {
-            return TileKind.MEK_MACHINE;
         }
         if (te instanceof net.minecraft.util.ITickable) {
             return TileKind.ITICKABLE;
@@ -217,17 +212,6 @@ public final class AccelerateHelper {
                 } else {
                     // Feature switched off: remove this source's injected modifier.
                     ModularMachineryAccelerator.restore(targetTE, sourceKey);
-                }
-                return 0;
-            }
-
-            // Mekanism CE (1.12): plain ITickable, but update() has heavy side
-            // effects (GUI sync packets, ticker++, factory neighbor updates),
-            // so advance only the public onUpdate() processing logic. Energy is
-            // drawn from the machine's own Mekanism grid, never converted.
-            case MEK_MACHINE: {
-                if (TimeBusConfig.mekAccelerationEnabled) {
-                    return MekanismAccelerator.runOnUpdate(targetTE, n);
                 }
                 return 0;
             }

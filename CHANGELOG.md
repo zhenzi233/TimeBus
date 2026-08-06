@@ -2,30 +2,15 @@
 
 ## v1.0.6
 
-Mekanism CE acceleration (added after the code-review fixes):
-
-- Time Bus can now accelerate Mekanism CE (1.12 branch, CurseForge 399904)
-  machines by advancing their public onUpdate() directly - processing logic
-  only, without update()'s GUI-sync packets, component ticking or ticker++
-  side effects
-- Energy is drawn from the machine's own Mekanism grid (no cross-mod energy
-  conversion); machines simply skip ticks when power runs out
-- New config: mekAccelerationEnabled (default true)
-- Soft dependency: mekanism-ce added via CurseMaven as modRuntimeOnly; all
-  access is reflective and degrades gracefully when Mekanism is absent
-- Mekanism CE requires CodeChickenLib: the old CCL (3.2.3.358) crashes with
-  an NPE on non-FG2 dev environments, so CCL CRE 3.3.5 is pulled from
-  Cleanroom's official maven (3.3.8+ requires cleanroom >= 0.6.6-alpha,
-  incompatible with the current 0.5.17 toolchain; 3.3.5 only needs 0.3.13+)
 - MM acceleration now stacks: each Time Bus / wand injects its own per-source
   duration modifier, and MM multiplies them together (8x + 4x = 32x); removing
   a bus restores its modifier (previously it stayed on the machine and was
   even saved into the world save)
+- MM acceleration also supports factory controllers (TileFactoryController)
 - dev toolchain: fixed a Groovy quirk in runClient extra JVM args handling
   (`split { "\\s+" }` coerced the result into a char list and corrupted the
   javaagent command line)
-- docs: DEVELOPER.md §2.5 documents the reflection assumptions and version
-  lock; README (EN/中文) updated
+- docs: DEVELOPER.md / README (EN/中文) updated
 
 Code-review fixes (14-item review of v1.0.5):
 

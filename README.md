@@ -77,10 +77,6 @@ An AE-powered, 512-byte **fluid storage cell** that holds only Time Fluid (model
 - Java 17 (Gradle runtime) + Java 25 (compile toolchain)
 
 
-## Compatibility
-
-- Time Bus can accelerate Mekanism CE (1.12 branch) machines by advancing their processing directly (public onUpdate()); energy is drawn from the machine's own Mekanism grid - no cross-mod energy conversion. Disable with `mekAccelerationEnabled`.
-
 ## Build
 
 ```bat
