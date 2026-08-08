@@ -48,29 +48,14 @@ public final class ModularMachineryAccelerator {
     private static final String MODIFIER_KEY_PREFIX = "timebus_duration_accel";
 
     /**
-     * Tracks which source (Time Bus part / wand) injected a duration modifier
+     * Remembers which source (Time Bus part / wand) injected a duration modifier
      * on which controller, so {@link #restoreAllForSource} can clean up when a
-     * source disappears (e.g. a Time Bus is removed from the world), and caches
-     * the last applied multiplier + thread count so {@link #apply} can skip the
-     * reflection hot path while nothing has changed. Without this, injected
-     * modifiers would stay on machines forever and even be written into the
-     * world save. World keys are weak references: entries go away
-     * automatically when the World unloads.
+     * source disappears (e.g. a Time Bus is removed from the world). Without
+     * this, injected modifiers would stay on machines forever and even be
+     * written into the world save. World keys are weak references: entries go
+     * away automatically when the World unloads.
      */
-    private static final Map<World, Map<BlockPos, Map<String, CachedInjection>>> INJECTED = new WeakHashMap<>();
-
-    /** 上次注入状态缓存：来源在某个控制器上注入的倍率与当时的线程数。
-     *  倍率与线程数都未变化时，apply 的快路径直接信任缓存，热路径零反射；
-     *  任一变化（速度卡调整 / 机器重建线程）都会重新走完整注入流程。 */
-    private static final class CachedInjection {
-        final int speed;
-        final int threadCount;
-
-        CachedInjection(final int speed, final int threadCount) {
-            this.speed = speed;
-            this.threadCount = threadCount;
-        }
-    }
+    private static final Map<World, Map<BlockPos, Set<String>>> INJECTED = new WeakHashMap<>();
 
     private static volatile boolean resolved;
     private static volatile boolean available;
@@ -90,6 +75,13 @@ public final class ModularMachineryAccelerator {
     private static volatile Constructor<?> recipeModifierCtor;
     private static volatile Object ioInput;
     private static volatile int operationMultiply;
+    /**
+     * 配方时长 modifier 的 target（RequirementTypesMM.REQUIREMENT_DURATION）。
+     * MM 计算 totalTick 时按该 target 查找 modifier（ActiveMachineRecipe.tick），
+     * 传 null 或其它类型都不会命中；同时该 target 已注册，序列化/同步时才
+     * 不会产生空注册名导致客户端反序列化崩溃。
+     */
+    private static volatile Object recipeDurationType;
 
     /** True if the tile is an MM (CE) multiblock machine controller. */
     public static boolean isController(final TileEntity te) {
@@ -111,8 +103,7 @@ public final class ModularMachineryAccelerator {
      * <p>Idempotent per (thread, source): re-applying the same multiplier
      * skips, a different multiplier replaces this source's own modifier only.
      *
-     * @return true if the acceleration is in effect (threads were touched this
-     *         call, or the cached state already matches so nothing was needed)
+     * @return true if at least one thread was touched
      */
     public static boolean apply(final TileEntity te, final String sourceKey, final int accelerate) {
         if (te == null || accelerate <= 1) {
@@ -134,18 +125,11 @@ public final class ModularMachineryAccelerator {
             if (threads == null) {
                 return false;
             }
-
-            // 快路径：上次注入的倍率与线程数都未变，直接信任缓存，
-            // 热路径不再做 per-thread 的反射检查。
-            final CachedInjection cached = getCached(te, sourceKey);
-            if (cached != null && cached.speed == accelerate && cached.threadCount == threads.length) {
-                return cached.threadCount > 0;
-            }
-
             if (threads.length == 0) {
                 // 工厂机器没有核心线程（CraftTweaker 未配置 addCoreThread）时线程列表为空，
-                // 这是机器配置问题而非错误；缓存空状态避免每个 tick 刷屏。
-                rememberInjected(te, sourceKey, accelerate, 0);
+                // 这是机器配置问题而非错误；用 debug 级别避免每个 tick 刷屏。
+                TimeBus.LOGGER.debug("Time Bus: MM controller {} ({}) has no recipe threads",
+                        te.getPos(), te.getClass().getSimpleName());
                 return false;
             }
             for (final Object thread : threads) {
@@ -156,15 +140,13 @@ public final class ModularMachineryAccelerator {
                     continue; // already injected with this multiplier
                 }
                 removePermanentModifier.invoke(thread, key);
-                final Object modifier = recipeModifierCtor.newInstance(null, ioInput,
+                final Object modifier = recipeModifierCtor.newInstance(recipeDurationType, ioInput,
                         target, operationMultiply, false);
                 addPermanentModifier.invoke(thread, key, modifier);
                 touched = true;
             }
-            // 无论本次是否实际注入过，只要线程列表与倍率已确认一致就缓存，
-            // 让下一次 apply 直接走快路径。
-            rememberInjected(te, sourceKey, accelerate, threads.length);
             if (touched) {
+                rememberInjected(te, sourceKey);
                 TimeBus.LOGGER.info("Time Bus: MM applied source={} speed={} at {} ({} threads, tile {})",
                         sourceKey, accelerate, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
@@ -261,7 +243,7 @@ public final class ModularMachineryAccelerator {
         }
         final Set<BlockPos> positions;
         synchronized (INJECTED) {
-            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(world);
+            final Map<BlockPos, Set<String>> byPos = INJECTED.get(world);
             positions = byPos == null ? java.util.Collections.emptySet() : new HashSet<>(byPos.keySet());
         }
         for (final BlockPos pos : positions) {
@@ -293,13 +275,13 @@ public final class ModularMachineryAccelerator {
         }
         final List<Map.Entry<BlockPos, String>> pending = new ArrayList<>();
         synchronized (INJECTED) {
-            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(world);
+            final Map<BlockPos, Set<String>> byPos = INJECTED.get(world);
             if (byPos == null || byPos.isEmpty()) {
                 return;
             }
-            for (final Map.Entry<BlockPos, Map<String, CachedInjection>> e : byPos.entrySet()) {
+            for (final Map.Entry<BlockPos, Set<String>> e : byPos.entrySet()) {
                 final BlockPos pos = e.getKey();
-                for (final String sourceKey : e.getValue().keySet()) {
+                for (final String sourceKey : e.getValue()) {
                     pending.add(new AbstractMap.SimpleEntry<>(pos, sourceKey));
                 }
             }
@@ -358,6 +340,11 @@ public final class ModularMachineryAccelerator {
                 final Field ioInputField = ioTypeClass.getField("INPUT");
                 ioInput = ioInputField.get(null);
                 operationMultiply = modifierClass.getField("OPERATION_MULTIPLY").getInt(null);
+                // 配方时长专用 target；必须取注册过的实例，构造 modifier 时传给
+                // 第一个参数，否则序列化出空注册名（见 serialize()/deserialize()）。
+                final Class<?> requirementTypesClass = Class.forName(
+                        "hellfirepvp.modularmachinery.common.lib.RequirementTypesMM");
+                recipeDurationType = requirementTypesClass.getField("REQUIREMENT_DURATION").get(null);
                 available = true;
             } catch (Exception e) {
                 TimeBus.LOGGER.warn("Time Bus: MM acceleration unavailable: {}", e.toString());
@@ -368,30 +355,29 @@ public final class ModularMachineryAccelerator {
         }
     }
 
-    private static void rememberInjected(final TileEntity te, final String sourceKey,
-                                         final int speed, final int threadCount) {
+    /** 该控制器当前是否仍被某个加速来源注入（时间总线/时间杖）。 */
+    public static boolean isAccelerated(final TileEntity te) {
+        if (te == null) {
+            return false;
+        }
+        synchronized (INJECTED) {
+            final Map<BlockPos, Set<String>> byPos = INJECTED.get(te.getWorld());
+            if (byPos == null) {
+                return false;
+            }
+            final Set<String> sources = byPos.get(te.getPos());
+            return sources != null && !sources.isEmpty();
+        }
+    }
+
+    private static void rememberInjected(final TileEntity te, final String sourceKey) {
         if (te == null || sourceKey == null) {
             return;
         }
         synchronized (INJECTED) {
             INJECTED.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
-                    .computeIfAbsent(te.getPos(), p -> new HashMap<>())
-                    .put(sourceKey, new CachedInjection(speed, threadCount));
-        }
-    }
-
-    /** 读取某来源在控制器上的上次注入状态；无记录返回 null。 */
-    private static CachedInjection getCached(final TileEntity te, final String sourceKey) {
-        if (te == null || sourceKey == null) {
-            return null;
-        }
-        synchronized (INJECTED) {
-            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(te.getWorld());
-            if (byPos == null) {
-                return null;
-            }
-            final Map<String, CachedInjection> sources = byPos.get(te.getPos());
-            return sources == null ? null : sources.get(sourceKey);
+                    .computeIfAbsent(te.getPos(), p -> new HashSet<>())
+                    .add(sourceKey);
         }
     }
 
@@ -400,11 +386,11 @@ public final class ModularMachineryAccelerator {
             return;
         }
         synchronized (INJECTED) {
-            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(te.getWorld());
+            final Map<BlockPos, Set<String>> byPos = INJECTED.get(te.getWorld());
             if (byPos == null) {
                 return;
             }
-            final Map<String, CachedInjection> sources = byPos.get(te.getPos());
+            final Set<String> sources = byPos.get(te.getPos());
             if (sources != null) {
                 sources.remove(sourceKey);
                 if (sources.isEmpty()) {
