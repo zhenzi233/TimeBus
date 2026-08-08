@@ -332,3 +332,48 @@ Token 获取：Modrinth 在账号设置页生成（需要 `CREATE_VERSION` 权�
 - **环境标签**：CurseForge 2026-07-15 起强制要求环境标签，脚本/任务里已显式带上 Client、Server 环境版本。
 - **依赖关系**：AE2 UEL 主项目没发布在 Modrinth，只在 CurseForge 侧配置了 `ae2-extended-life` 必需依赖（slug/关系见发布脚本和任务）。
 - **上传文件**：发布 jar 是 `remapJar` 产物；`enable_shadow=true` 时自动改用 `remapShadowJar`。
+
+## 10. 可选模组加速的教训（Modular Machinery 实录，v1.0.6 修复过程）
+
+本章记录为 MM 工厂控制器实现/修复加速时的完整教训链。这些坑在其他可选模组加速（尤其反射注入 + Mixin）上同样适用。
+
+### 10.1 反射目标必须对着实际 jar 验证
+
+- 旧 Mekanism 加速翻车：反射 `TileEntityBasicBlock.onUpdate()`，但用户实际环境是 Mekanism-CE-Unofficial（CurseForge 840735）而不是 mekce（399904）。即使该版本里 `onUpdate()` 仍然存在，也已是空钩子（处理逻辑移到异步路径），调用等于没加速。
+- 教训：反射的类路径 / 方法签名 / 构造器参数，一律用 `javap -p -c` 对着**实际运行的 jar**（CurseForge 文件 ID 对应文件）核对，不能凭 README、GitHub 分支或旧经验猜测；fork 模组迭代快，跨版本差异极大。
+- 下载/引用外部资源（mod jar 等）前先征求项目所有者意见（仓库协作约定）。
+
+### 10.2 构造第三方对象时参数语义必须精确（null 的代价）
+
+MM 注入配方时长 modifier 时曾把构造器第一个参数（RequirementType target）传 null，引发两级问题：
+
+1. **加速从未生效**：`ActiveMachineRecipe.tick()` 按 `RequirementTypesMM.REQUIREMENT_DURATION` 查 modifier 应用，null target 不命中任何查询。
+2. **存档/同步崩溃**：`RecipeModifier.serialize()` 把 null target 序列化成空字符串；`RecipeModifierBuilder.build()` 反序列化时查注册表失败 → 打日志 `Could not find requirementType !` → 返回 null；null 值再被 `FactoryRecipeThread.deserialize()` 塞进 `ConcurrentHashMap` → 客户端 NPE。
+
+正确做法：反射解析 `RequirementTypesMM.REQUIREMENT_DURATION`（已注册的 RequirementDuration 实例）作为 target；ioTarget 保持 `IOType.INPUT`（`ModifierApplier.apply` 对 null IOType 走 input 分支，恰好匹配）。
+
+教训：构造第三方对象前先反编译**它的消费端**（谁在按什么条件查找/序列化这个对象），确认每个参数的语义；"传 null 反正能用"的假设在序列化/同步场景下尤其危险。
+
+### 10.3 热路径缓存必须覆盖状态的全部变化维度
+
+- 曾给 `apply()` 加"倍率 + 线程数"缓存快路径（4.4），但 MM 的 `RecipeThread.invalidate()`（工厂空闲线程回收 `cleanIdleTimeoutThread`，idleTime ≥ 200 tick）会 `permanentModifiers.clear()`——线程对象和数量都不变，modifier 却没了。缓存命中后不再重新注入，加速永久丢失且不自愈。
+- 教训：缓存的失效条件必须覆盖状态的所有变化维度；对第三方对象的状态变化不可预测时，逐 tick 全量校验（反射贵一点）比缓存更稳。**正确性优先于性能**。
+- 结论：4.4 的缓存已回退为逐 tick 全量 `hasExactModifier` 校验。
+
+### 10.4 可选 mod 的条件 Mixin
+
+- Mixin 注解处理器在编译期校验 target 类存在：可选 mod 的 Mixin 需要 `modCompileOnly` 提供编译期类（不打包、不强制运行时依赖），否则报 `Mixin target ... could not be found`。
+- 第三方 mod 不混淆：`@Inject(method = "cleanIdleTimeoutThread", ..., remap = false)` 必须显式 `remap=false`，否则注解处理器报 `Unable to locate obfuscation mapping`。
+- 独立 mixin 配置（`timebus.mm.mixin.json`）设 `"required": false`：目标类缺失或方法签名变化时该 mixin 静默跳过，不影响 TimeBus 其他功能；targets 用字符串（如 `hellfirepvp.modularmachinery.common.tiles.TileFactoryController`），Mixin 类内不 import MM 类型，保持无硬依赖。
+- 新 mixin 配置要同时注册到两处：dev 运行的 `crl.dev.mixin`（build.gradle）和发布 jar manifest 的 `MixinConfigs`。
+
+### 10.5 MM 加速运行时机制备忘（防再踩坑）
+
+- 反加速闸门：`TileEntityRestrictedTick.update()` 是 final 且按世界 tick 去重，ITickable 连拍无效；正确入口是注入 duration modifier（permanentModifiers，target=REQUIREMENT_DURATION）。
+- 工厂线程动态：核心线程（coreRecipeThreads）常驻；额外线程（recipeThreadList）按需创建、空闲 200 tick 回收，回收时 invalidate 清空 permanent modifiers → 加速丢失。解法：`MixinFactoryThreadRecycle` 在控制器仍被加速（`ModularMachineryAccelerator.isAccelerated`）且配置 `MM Keep Idle Threads=true` 时跳过回收。
+- 生命周期兜底：注入的 modifier 会随 MM tile 同步/存档；关服/世界卸载由 `restoreAllForWorld`/`restoreAll`（FMLServerStoppingEvent + WorldEvent.Unload）清理，但运行中的同步必须靠 modifier 本身可序列化（target 合法）来保证，否则客户端反序列化即崩。
+
+### 10.6 诊断方法论
+
+- 用日志定位：`run/client/logs/latest.log` 中 `Could not find requirementType !`（空 type）+ NPE 堆栈（`FactoryRecipeThread.deserialize → ConcurrentHashMap.putAll`）直接指向反序列化路径，比猜快得多。
+- 验证外部报告（AI 生成的优化/兼容性报告）时逐条对照实际字节码；报告与代码冲突以代码为准（本系列报告多处不准：onUpdate"已移除"、配方时长 0.8^n 公式、EnableUpgradeConfigure 描述等，均以 javap 反汇编结果修正）。
