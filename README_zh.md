@@ -122,6 +122,7 @@ gradlew.bat build
 | `Singularity Unit Value` | `1000` | 每个奇点贡献的当量 |
 | `Units per Batch` | `64000` | 产出一批时间流体所需的当量（64000 球或 64 奇点） |
 | `Time Fluid per Batch` | `1000` | 每批产出的时间流体 mB |
+| `Inputs Consumed per Update` | `64` | 每次 update 消费的输入数量（总线加速时吞吐随加速线性提升；槽位本身始终可堆叠 64 个） |
 
 ### 时间杖
 

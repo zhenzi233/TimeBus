@@ -117,6 +117,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | `Singularity Unit Value` | `1000` | Progress units contributed by one Singularity |
 | `Units per Batch` | `64000` | Total units needed to produce one batch (64000 balls or 64 singularities) |
 | `Time Fluid per Batch` | `1000` | mB of Time Fluid produced per full batch |
+| `Inputs Consumed per Update` | `64` | Input items consumed per update call (throughput scales with bus acceleration; the slot itself always stacks up to 64) |
 
 ### Time Wand
 

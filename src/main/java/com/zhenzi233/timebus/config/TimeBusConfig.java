@@ -123,6 +123,17 @@ public class TimeBusConfig {
     @RangeDouble(min = 1.0, max = 1000000000.0)
     public static double timeFluidPerBatch = 1000.0;
 
+    @Name("Inputs Consumed per Update")
+    @Comment({
+        "How many input items the Time Fluid Generator consumes per update call.",
+        "Normally one update per tick; a Time Bus accelerates the machine by",
+        "calling update() multiple times per tick, so throughput scales with",
+        "the bus speed. The input slot itself always stacks up to 64 items.",
+        "Default: 64"
+    })
+    @RangeInt(min = 1, max = 64)
+    public static int generatorConsumePerTick = 64;
+
     // --- Time Wand ---
 
     @Name("Wand Cell Size (Bytes)")

@@ -33,8 +33,8 @@ import javax.annotation.Nullable;
  * <p>
  * Mirrors the AE2 Matter Condenser: the output mode (Matter Balls / Singularity)
  * is switchable via a GUI button, inputs are accumulated until enough have been
- * fed in, then Time Fluid is produced in one batch (256 Matter Balls = 1 mB,
- * 256 Singularities = 10000 mB by default). The storage component slot decides
+ * fed in, then Time Fluid is produced in one batch (by default 64000 Matter
+ * Balls or 64 Singularities = 1000 mB). The storage component slot decides
  * the maximum fluid buffer.
  */
 public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appeng.fluids.util.IAEFluidTank, IConfigManagerHost, IConfigurableObject {
@@ -90,8 +90,10 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
     }
 
     /**
-     * Consume one input item per tick. Every accepted item adds its unit value to a
-     * single progress counter (1 Matter Ball = 1 unit, 1 Singularity = singularityUnit
+     * Consume up to {@link TimeBusConfig#generatorConsumePerTick} input items per update (normally one
+     * update per tick, or several updates per tick while a Time Bus is accelerating
+     * the machine). Every accepted item adds its unit value to a single progress
+     * counter (1 Matter Ball = 1 unit, 1 Singularity = singularityUnit
      * units), so progress survives switching the input mode. When the counter reaches
      * unitsPerBatch and there is room, Time Fluid is produced in a full batch.
      * Only the input matching the current output mode is accepted.
@@ -107,7 +109,7 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
         // forced externally (NBT / another mod), consume the input instead of
         // letting it sit in the slot forever.
         if (mode == CondenserOutput.TRASH) {
-            this.inputSlot.extractItem(0, 1, false);
+            this.inputSlot.extractItem(0, TimeBusConfig.generatorConsumePerTick, false);
             return;
         }
 
@@ -128,17 +130,18 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
             return;
         }
 
-        ItemStack consumed = this.inputSlot.extractItem(0, 1, false);
+        ItemStack consumed = this.inputSlot.extractItem(0, TimeBusConfig.generatorConsumePerTick, false);
         if (consumed.isEmpty()) {
             return;
         }
 
+        final int consumedCount = consumed.getCount();
         if (mode == CondenserOutput.MATTER_BALLS) {
-            this.matterBallCount++;
+            this.matterBallCount += consumedCount;
         } else {
-            this.singularityCount++;
+            this.singularityCount += consumedCount;
         }
-        this.progressUnits += unitValue;
+        this.progressUnits += unitValue * consumedCount;
 
         // Produce as many full batches as the accumulated units allow.
         while (this.progressUnits >= TimeBusConfig.unitsPerBatch && space >= TimeBusConfig.timeFluidPerBatch) {
@@ -350,7 +353,9 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
 
         @Override
         public int getSlotLimit(int slot) {
-            return 1;
+            // 输入槽堆叠上限固定为物品最大堆叠（64），与每次消费量独立；
+            // 玩家可在配置中调整每次 update 的消费速度。
+            return 64;
         }
     }
 
