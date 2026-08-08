@@ -10,12 +10,16 @@ import com.zhenzi233.timebus.client.gui.TimeBusGui;
 import com.zhenzi233.timebus.fluid.TimeBusFluids;
 import com.zhenzi233.timebus.part.ItemTimeBus;
 import com.zhenzi233.timebus.proxy.IProxy;
+import com.zhenzi233.timebus.util.ModularMachineryAccelerator;
 import com.zhenzi233.timebus.recipe.TimeBusRecipes;
 import com.zhenzi233.timebus.tile.TileTimeGenerator;
 import net.minecraft.block.Block;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.event.FMLServerStoppingEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.SidedProxy;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
@@ -122,5 +126,22 @@ public class TimeBus {
         // Recipes must be registered after AE2 is fully initialized.
         TimeBusRecipes.registerInscriberRecipes();
         TimeBusRecipes.registerCraftingRecipes();
+    }
+
+    @Mod.EventHandler
+    public void serverStopping(final FMLServerStoppingEvent event) {
+        // FMLServerStoppingEvent 在服务器开始保存世界之前触发：先摘掉所有 MM
+        // 注入的配方时长 modifier，防止其被写进存档（拆除总线之外的兜底清理）。
+        ModularMachineryAccelerator.restoreAll();
+    }
+
+    /** Forge 总线事件：世界卸载时兜底清理 MM 注入的 modifier，防止维度卸载/关服时残留。 */
+    @Mod.EventBusSubscriber
+    public static class ForgeEvents {
+
+        @SubscribeEvent
+        public static void onWorldUnload(final WorldEvent.Unload event) {
+            ModularMachineryAccelerator.restoreAllForWorld(event.getWorld());
+        }
     }
 }

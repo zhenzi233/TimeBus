@@ -8,8 +8,11 @@ import net.minecraft.world.World;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -45,14 +48,29 @@ public final class ModularMachineryAccelerator {
     private static final String MODIFIER_KEY_PREFIX = "timebus_duration_accel";
 
     /**
-     * Remembers which source (Time Bus part / wand) injected a duration modifier
+     * Tracks which source (Time Bus part / wand) injected a duration modifier
      * on which controller, so {@link #restoreAllForSource} can clean up when a
-     * source disappears (e.g. a Time Bus is removed from the world). Without
-     * this, injected modifiers would stay on machines forever and even be
-     * written into the world save. World keys are weak references: entries go
-     * away automatically when the World unloads.
+     * source disappears (e.g. a Time Bus is removed from the world), and caches
+     * the last applied multiplier + thread count so {@link #apply} can skip the
+     * reflection hot path while nothing has changed. Without this, injected
+     * modifiers would stay on machines forever and even be written into the
+     * world save. World keys are weak references: entries go away
+     * automatically when the World unloads.
      */
-    private static final Map<World, Map<BlockPos, Set<String>>> INJECTED = new WeakHashMap<>();
+    private static final Map<World, Map<BlockPos, Map<String, CachedInjection>>> INJECTED = new WeakHashMap<>();
+
+    /** 上次注入状态缓存：来源在某个控制器上注入的倍率与当时的线程数。
+     *  倍率与线程数都未变化时，apply 的快路径直接信任缓存，热路径零反射；
+     *  任一变化（速度卡调整 / 机器重建线程）都会重新走完整注入流程。 */
+    private static final class CachedInjection {
+        final int speed;
+        final int threadCount;
+
+        CachedInjection(final int speed, final int threadCount) {
+            this.speed = speed;
+            this.threadCount = threadCount;
+        }
+    }
 
     private static volatile boolean resolved;
     private static volatile boolean available;
@@ -93,7 +111,8 @@ public final class ModularMachineryAccelerator {
      * <p>Idempotent per (thread, source): re-applying the same multiplier
      * skips, a different multiplier replaces this source's own modifier only.
      *
-     * @return true if at least one thread was touched
+     * @return true if the acceleration is in effect (threads were touched this
+     *         call, or the cached state already matches so nothing was needed)
      */
     public static boolean apply(final TileEntity te, final String sourceKey, final int accelerate) {
         if (te == null || accelerate <= 1) {
@@ -115,11 +134,18 @@ public final class ModularMachineryAccelerator {
             if (threads == null) {
                 return false;
             }
+
+            // 快路径：上次注入的倍率与线程数都未变，直接信任缓存，
+            // 热路径不再做 per-thread 的反射检查。
+            final CachedInjection cached = getCached(te, sourceKey);
+            if (cached != null && cached.speed == accelerate && cached.threadCount == threads.length) {
+                return cached.threadCount > 0;
+            }
+
             if (threads.length == 0) {
                 // 工厂机器没有核心线程（CraftTweaker 未配置 addCoreThread）时线程列表为空，
-                // 这是机器配置问题而非错误；用 debug 级别避免每个 tick 刷屏。
-                TimeBus.LOGGER.debug("Time Bus: MM controller {} ({}) has no recipe threads",
-                        te.getPos(), te.getClass().getSimpleName());
+                // 这是机器配置问题而非错误；缓存空状态避免每个 tick 刷屏。
+                rememberInjected(te, sourceKey, accelerate, 0);
                 return false;
             }
             for (final Object thread : threads) {
@@ -135,8 +161,10 @@ public final class ModularMachineryAccelerator {
                 addPermanentModifier.invoke(thread, key, modifier);
                 touched = true;
             }
+            // 无论本次是否实际注入过，只要线程列表与倍率已确认一致就缓存，
+            // 让下一次 apply 直接走快路径。
+            rememberInjected(te, sourceKey, accelerate, threads.length);
             if (touched) {
-                rememberInjected(te, sourceKey);
                 TimeBus.LOGGER.info("Time Bus: MM applied source={} speed={} at {} ({} threads, tile {})",
                         sourceKey, accelerate, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
@@ -233,7 +261,7 @@ public final class ModularMachineryAccelerator {
         }
         final Set<BlockPos> positions;
         synchronized (INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = INJECTED.get(world);
+            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(world);
             positions = byPos == null ? java.util.Collections.emptySet() : new HashSet<>(byPos.keySet());
         }
         for (final BlockPos pos : positions) {
@@ -244,6 +272,58 @@ public final class ModularMachineryAccelerator {
             if (te != null) {
                 restore(te, sourceKey);
             }
+        }
+    }
+
+    /**
+     * Remove every modifier injected by any source on any controller in
+     * {@code world}. Used as a safety net when a world is about to be
+     * unloaded (dimension unload / server shutdown), so injected modifiers
+     * are never written into the world save and never leak into a reloaded
+     * machine. Unlike {@link #restoreAllForSource}, this walks the whole
+     * tracking map instead of a single source key.
+     */
+    public static void restoreAllForWorld(final World world) {
+        if (world == null) {
+            return;
+        }
+        resolve();
+        if (!available) {
+            return;
+        }
+        final List<Map.Entry<BlockPos, String>> pending = new ArrayList<>();
+        synchronized (INJECTED) {
+            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(world);
+            if (byPos == null || byPos.isEmpty()) {
+                return;
+            }
+            for (final Map.Entry<BlockPos, Map<String, CachedInjection>> e : byPos.entrySet()) {
+                final BlockPos pos = e.getKey();
+                for (final String sourceKey : e.getValue().keySet()) {
+                    pending.add(new AbstractMap.SimpleEntry<>(pos, sourceKey));
+                }
+            }
+        }
+        for (final Map.Entry<BlockPos, String> e : pending) {
+            final TileEntity te = world.getTileEntity(e.getKey());
+            if (te != null) {
+                restore(te, e.getValue());
+            }
+        }
+    }
+
+    /** Remove every injected modifier in every world still tracked (server shutdown). */
+    public static void restoreAll() {
+        resolve();
+        if (!available) {
+            return;
+        }
+        final List<World> worlds;
+        synchronized (INJECTED) {
+            worlds = new ArrayList<>(INJECTED.keySet());
+        }
+        for (final World world : worlds) {
+            restoreAllForWorld(world);
         }
     }
 
@@ -288,14 +368,30 @@ public final class ModularMachineryAccelerator {
         }
     }
 
-    private static void rememberInjected(final TileEntity te, final String sourceKey) {
+    private static void rememberInjected(final TileEntity te, final String sourceKey,
+                                         final int speed, final int threadCount) {
         if (te == null || sourceKey == null) {
             return;
         }
         synchronized (INJECTED) {
             INJECTED.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
-                    .computeIfAbsent(te.getPos(), p -> new HashSet<>())
-                    .add(sourceKey);
+                    .computeIfAbsent(te.getPos(), p -> new HashMap<>())
+                    .put(sourceKey, new CachedInjection(speed, threadCount));
+        }
+    }
+
+    /** 读取某来源在控制器上的上次注入状态；无记录返回 null。 */
+    private static CachedInjection getCached(final TileEntity te, final String sourceKey) {
+        if (te == null || sourceKey == null) {
+            return null;
+        }
+        synchronized (INJECTED) {
+            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(te.getWorld());
+            if (byPos == null) {
+                return null;
+            }
+            final Map<String, CachedInjection> sources = byPos.get(te.getPos());
+            return sources == null ? null : sources.get(sourceKey);
         }
     }
 
@@ -304,11 +400,11 @@ public final class ModularMachineryAccelerator {
             return;
         }
         synchronized (INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = INJECTED.get(te.getWorld());
+            final Map<BlockPos, Map<String, CachedInjection>> byPos = INJECTED.get(te.getWorld());
             if (byPos == null) {
                 return;
             }
-            final Set<String> sources = byPos.get(te.getPos());
+            final Map<String, CachedInjection> sources = byPos.get(te.getPos());
             if (sources != null) {
                 sources.remove(sourceKey);
                 if (sources.isEmpty()) {
