@@ -128,6 +128,13 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | `Wand Energy Cost` | `1000` | AE consumed per use |
 | `Wand Batch Size` | `16` | Bus work runs per right-click on an Import/Export Bus |
 
+### Modular Machinery (optional)
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `MM Acceleration Enabled` | `false` | Whether to speed up MM controllers by compressing their recipe duration (does not apply to restricted-tick machines like Mek) |
+| `MM Keep Idle Threads` | `true` | Whether factory controllers currently accelerated by a Time Bus keep idle extra threads alive (disables MM 200-tick recycle, which clears the injected speed modifier and briefly drops the thread back to normal speed) |
+
 ## Usage
 
 1. Place the Time Bus on any side of an AE2 cable/bus network.

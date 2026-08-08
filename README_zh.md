@@ -133,6 +133,13 @@ gradlew.bat build
 | `Wand Energy Cost` | `1000` | 每次使用消耗的 AE 能量 |
 | `Wand Batch Size` | `16` | 右键输入/输出总线时连续运行的总线工作次数 |
 
+### Modular Machinery（可选）
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MM Acceleration Enabled` | `false` | 是否压缩 MM 控制器配方时长来加速（Mek 类受限 tick 机器不适用） |
+| `MM Keep Idle Threads` | `true` | 被时间总线加速的工厂控制器是否保留空闲线程：关闭 MM 的 200 tick 线程回收，避免回收清掉加速 modifier 导致线程短暂跌回原速 |
+
 ## 使用方式
 
 1. 将时间总线放置在 AE2 线缆/总线网络的任意一侧。

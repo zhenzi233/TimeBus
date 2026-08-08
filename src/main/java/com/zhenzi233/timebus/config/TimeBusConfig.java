@@ -193,6 +193,17 @@ public class TimeBusConfig {
     })
     public static boolean mmAccelerationEnabled = false;
 
+    @Name("MM Keep Idle Threads")
+    @Comment({
+        "If true, Modular Machinery factory controllers that are currently being",
+        "accelerated by a Time Bus keep their idle extra threads alive instead of",
+        "letting MM recycle them. MM recycles idle threads after 200 ticks, which",
+        "clears the injected speed modifier and briefly drops the thread back to",
+        "normal speed until the Time Bus re-applies it.",
+        "Default: true"
+    })
+    public static boolean mmKeepThreadsEnabled = true;
+
 
     // --- Parsed caches for the comma-separated list configs ---
     // The raw strings are parsed once and cached; the cache is invalidated on
