@@ -371,6 +371,7 @@ MM 注入配方时长 modifier 时曾把构造器第一个参数（RequirementTy
 
 - 反加速闸门：`TileEntityRestrictedTick.update()` 是 final 且按世界 tick 去重，ITickable 连拍无效；正确入口是注入 permanentModifiers 里的 modifier：时长用 target=REQUIREMENT_DURATION（×1/speed），能耗守恒用 target=REQUIREMENT_ENERGY 的 input/output 双向 modifier（×speed，由配置 `MM Energy Cost Follows Speed` 控制）。
 - 工厂线程动态：核心线程（coreRecipeThreads）常驻；额外线程（recipeThreadList）按需创建、空闲 200 tick 回收，回收时 invalidate 清空 permanent modifiers → 加速丢失。解法：`MixinFactoryThreadRecycle` 在控制器仍被加速（`ModularMachineryAccelerator.isAccelerated`）且配置 `MM Keep Idle Threads=true` 时跳过回收。
+- context 池化脱节（重要）：MM 的 RecipeCraftingContext 是池化复用的（`setContext()` 归还旧 context、新 context 是 reset 空状态），因此 permanentModifiers 数据源里 modifier 正确、幂等检查通过，实际应用的 context 却可能已丢失 —— 表现为"线程没被加速，装/卸卡（触发重新写入 → flushContextModifier）才恢复"。解法：apply 每 100 tick 无条件重注入一次（remove+add 触发 `flushContextModifier` 把 permanent 刷回当前 context），脱节后最多 5 秒自愈。教训：幂等检查只验证数据源，验证不了第三方对象内部的实际应用状态。
 - 生命周期兜底：注入的 modifier 会随 MM tile 同步/存档；关服/世界卸载由 `restoreAllForWorld`/`restoreAll`（FMLServerStoppingEvent + WorldEvent.Unload）清理，但运行中的同步必须靠 modifier 本身可序列化（target 合法）来保证，否则客户端反序列化即崩。
 
 ### 10.6 诊断方法论

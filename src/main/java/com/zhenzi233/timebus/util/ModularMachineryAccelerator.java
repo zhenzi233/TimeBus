@@ -60,6 +60,20 @@ public final class ModularMachineryAccelerator {
      */
     private static final Map<World, Map<BlockPos, Set<String>>> INJECTED = new WeakHashMap<>();
 
+    /**
+     * 记录每个控制器上次"强制刷新"的世界 tick。
+     *
+     * <p>MM 的 context 是池化的：{@code setContext()} 会把旧 context 归还
+     * {@code RecipeCraftingContextPool}，新 context 是 reset 过的空状态。
+     * 此时线程的 permanentModifiers 数据源仍持有我们的 modifier（幂等检查
+     * 通过），但实际应用的 context 已丢失 —— 只有重新写入 modifier 触发
+     * {@code flushContextModifier()} 才会把 permanent 刷回 context。因此
+     * 每 FORCE_REFRESH_INTERVAL tick 无条件重注入一次，保证 context 脱节
+     * 后最多一个间隔内自愈。
+     */
+    private static final Map<World, Map<BlockPos, Long>> LAST_FORCE_REFRESH = new WeakHashMap<>();
+    private static final long FORCE_REFRESH_INTERVAL = 100;
+
     private static volatile boolean resolved;
     private static volatile boolean available;
 
@@ -133,6 +147,7 @@ public final class ModularMachineryAccelerator {
         final String energyOutKey = keyForEnergyOut(sourceKey);
         final float durationTarget = 1.0f / accelerate;
         final boolean scaleEnergy = TimeBusConfig.mmEnergyFollowsSpeed;
+        final boolean forceRefresh = shouldForceRefresh(te);
         boolean touched = false;
         try {
             final Method threadsGetter = getRecipeThreadListFor(te);
@@ -155,16 +170,16 @@ public final class ModularMachineryAccelerator {
                     continue;
                 }
                 // 配方时长压缩：x 1/speed
-                if (ensureModifier(thread, durationKey, recipeDurationType, ioInput, durationTarget)) {
+                if (ensureModifier(thread, durationKey, recipeDurationType, ioInput, durationTarget, forceRefresh)) {
                     touched = true;
                 }
                 if (scaleEnergy) {
                     // 能耗守恒：input（消耗）与 output（产出）都 x speed，
                     // 与时长压缩相抵，单次配方总耗电/总产出不变。
-                    if (ensureModifier(thread, energyInKey, recipeEnergyType, ioInput, accelerate)) {
+                    if (ensureModifier(thread, energyInKey, recipeEnergyType, ioInput, accelerate, forceRefresh)) {
                         touched = true;
                     }
-                    if (ensureModifier(thread, energyOutKey, recipeEnergyType, ioOutput, accelerate)) {
+                    if (ensureModifier(thread, energyOutKey, recipeEnergyType, ioOutput, accelerate, forceRefresh)) {
                         touched = true;
                     }
                 } else {
@@ -211,19 +226,42 @@ public final class ModularMachineryAccelerator {
      * {@code value}（按 targetType/ioTarget 构造）。已存在且值相同则跳过，
      * 否则替换该 key 的 modifier。
      *
-     * @return true 表示本次实际写入/替换了 modifier
+     * <p>{@code forceRefresh} 时即使值相同也重新 remove+add，触发
+     * {@code flushContextModifier()} 把 permanent 刷回当前 context（MM 的
+     * context 池化复用可能让实际应用状态与数据源脱节）。
+     *
+     * @return true 表示数据源的值发生了实际变化（用于日志/记录）
      */
     private static boolean ensureModifier(final Object thread, final String key,
                                           final Object targetType, final Object ioTarget,
-                                          final float value) throws Exception {
-        if (hasExactModifier(thread, key, value)) {
+                                          final float value, final boolean forceRefresh) throws Exception {
+        final boolean exact = hasExactModifier(thread, key, value);
+        if (exact && !forceRefresh) {
             return false;
         }
         removePermanentModifier.invoke(thread, key);
         final Object modifier = recipeModifierCtor.newInstance(targetType, ioTarget,
                 value, operationMultiply, false);
         addPermanentModifier.invoke(thread, key, modifier);
-        return true;
+        return !exact;
+    }
+
+    /** 距上次强制刷新是否已达到间隔（达到则记录本次并返回 true）。 */
+    private static boolean shouldForceRefresh(final TileEntity te) {
+        if (te == null || te.getWorld() == null) {
+            return false;
+        }
+        final long now = te.getWorld().getTotalWorldTime();
+        synchronized (LAST_FORCE_REFRESH) {
+            final Map<BlockPos, Long> byPos = LAST_FORCE_REFRESH.get(te.getWorld());
+            final Long last = byPos == null ? null : byPos.get(te.getPos());
+            if (last != null && now - last < FORCE_REFRESH_INTERVAL) {
+                return false;
+            }
+            LAST_FORCE_REFRESH.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
+                    .put(te.getPos(), now);
+            return true;
+        }
     }
 
     /** 移除能耗 modifier（配置关闭时清理残留）。 */
