@@ -218,7 +218,6 @@ jar {
     doFirst {
         manifest {
             def attribute_map = [:]
-            attribute_map['ModType'] = "CRL"
             attribute_map['MixinConfigs'] = "${mod_id}.default.mixin.json,${mod_id}.mod.mixin.json,${mod_id}.mm.mixin.json,${mod_id}.mek.mixin.json"
             if (configurations.contain.size() > 0) {
                 attribute_map['ContainedDeps'] = configurations.contain.collect { it.name }.join(' ')
