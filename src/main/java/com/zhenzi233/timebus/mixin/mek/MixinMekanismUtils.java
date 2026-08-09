@@ -30,7 +30,9 @@ public abstract class MixinMekanismUtils {
             at = @At(value = "INVOKE",
                     target = "Lmekanism/common/base/IUpgradeTile;getInstalledUpgrades(Lmekanism/common/Upgrade;)I"),
             remap = false)
-    private int timebus$addVirtualSpeedCards(final IUpgradeTile tile, final Upgrade upgrade) {
+    // fractionUpgrades 是静态方法，@Redirect 回调必须同为 static，
+    // 否则 Mixin 抛 InvalidInjectionException 导致整个注入失败。
+    private static int timebus$addVirtualSpeedCards(final IUpgradeTile tile, final Upgrade upgrade) {
         final int base = tile.getInstalledUpgrades(upgrade);
         if (upgrade == Upgrade.SPEED && TimeBusConfig.mekAccelerationEnabled) {
             final Integer speed = MekanismAccelerator.queryActive((TileEntity) tile);
