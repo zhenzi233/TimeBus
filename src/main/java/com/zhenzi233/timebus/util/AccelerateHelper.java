@@ -103,7 +103,7 @@ public final class AccelerateHelper {
             TimeBus.LOGGER.warn("Time Bus: scheduleBlockUpdate failed at {}: {}", pos, e.toString());
         }
         runTileUpdates(world, pos, Math.max(0, speed - 1), speed, sourceKey);
-        runRandomTicks(world, pos, state, block, speed * 20);
+        runRandomTicks(world, pos, state, block, speed * TimeBusConfig.randomTickCallsPerSpeed);
     }
 
     /**
@@ -125,17 +125,13 @@ public final class AccelerateHelper {
         switch (kind) {
             case CHARGER: {
                 final appeng.tile.misc.TileCharger charger = (appeng.tile.misc.TileCharger) targetTE;
-                // doWork() is private in TileCharger; invoke it via reflection at runtime.
-                // (An access transformer only changes runtime access, not compile-time
-                // visibility, so reflection is the portable way to call it.)
-                final java.lang.reflect.Method doWork = getChargerDoWork();
-                if (doWork == null) {
-                    return 0;
-                }
                 int ran = 0;
                 for (int i = 0; i < n; i++) {
                     try {
-                        doWork.invoke(charger);
+                        // doWork() is private in TileCharger; the mixin invoker
+                        // exposes it directly - no reflection dispatch overhead
+                        // (代码审查 3.2).
+                        ((com.zhenzi233.timebus.mixin.mod.MixinTileCharger) charger).timebus$doWork();
                         ran++;
                     } catch (Exception e) {
                         TimeBus.LOGGER.warn("Time Bus: TileCharger.doWork failed at {}: {}", target, e.toString());
@@ -211,6 +207,11 @@ public final class AccelerateHelper {
             // ITickable update-call path never wastes budget on these machines.
             case MM_CONTROLLER: {
                 if (TimeBusConfig.mmAccelerationEnabled) {
+                    if (sourceKey != null && sourceKey.startsWith("wand:")) {
+                        // 兜底：魔杖点击应走 ItemTimeWand.onItemUse 的 semi-permanent
+                        // 注入路径；若意外走到这里也绝不注入永久 modifier。
+                        return ModularMachineryAccelerator.applyWandToActiveRecipes(targetTE, sourceKey, speed) ? 1 : 0;
+                    }
                     if (ModularMachineryAccelerator.apply(targetTE, sourceKey, speed)) {
                         return 1;
                     }
@@ -283,20 +284,5 @@ public final class AccelerateHelper {
             }
         }
         return ran;
-    }
-
-    /** Cached reflection handle for TileCharger.doWork() (private in AE2). */
-    private static volatile java.lang.reflect.Method chargerDoWork;
-
-    private static java.lang.reflect.Method getChargerDoWork() {
-        if (chargerDoWork == null) {
-            try {
-                chargerDoWork = appeng.tile.misc.TileCharger.class.getDeclaredMethod("doWork");
-                chargerDoWork.setAccessible(true);
-            } catch (NoSuchMethodException e) {
-                TimeBus.LOGGER.warn("Time Bus: could not find TileCharger.doWork: {}", e.toString());
-            }
-        }
-        return chargerDoWork;
     }
 }

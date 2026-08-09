@@ -31,11 +31,22 @@ public class TimeBusConfig {
 
     @Name("Power Cost per Speed Unit")
     @Comment({
-        "Power cost multiplier. Total cost per tick = max(idlePower, effectiveSpeed * powerPerSpeed).",
+        "Power cost multiplier. Total cost per tick = max(idlePower, (effectiveSpeed + 2 * upgradeCount) * powerPerSpeed).",
         "Default: 0.5"
     })
     @RangeDouble(min = 0.0, max = 100.0)
     public static double powerPerSpeed = 0.5;
+
+    @Name("Random Tick Calls per Speed Unit")
+    @Comment({
+        "How many Block.randomTick calls one speed unit performs on randomly-ticking",
+        "blocks (crops, grass spread, ice melt, ...). At 32x speed the default 20 gives",
+        "640 calls per block, which can consume a large share of the per-tick work",
+        "budget; lower it if wide-range random-tick acceleration starves other blocks.",
+        "Default: 20"
+    })
+    @RangeInt(min = 1, max = 10000)
+    public static int randomTickCallsPerSpeed = 20;
 
     // --- Fluid Consumption Mode ---
 
@@ -139,7 +150,8 @@ public class TimeBusConfig {
     @Name("Wand Cell Size (Bytes)")
     @Comment({
         "Storage size of the Time Wand's fluid cell, in AE bytes.",
-        "Each byte holds 1000 mB of Time Fluid (512 bytes = 512,000 mB = 512 buckets by default).",
+        "AE2 fluid storage holds 8000 mB per byte (AE2EL getUnitsPerByte), so 512 bytes",
+        "= 4,096,000 mB = 4096 buckets by default.",
         "Default: 512"
     })
     @RangeInt(min = 1, max = 1000000000)
@@ -176,10 +188,13 @@ public class TimeBusConfig {
     @Comment({
         "How many transfer batches a right-click on an ME Import/Export Bus",
         "performs (each batch moves up to the bus's normal per-tick amount,",
-        "scaled by its speed cards). Default: 16"
+        "scaled by its speed cards). This runs in a single tick, so large values",
+        "can stall the server - keep it well below the Time Bus work budget.",
+        "Default: 16, max: 256"
     })
-    @RangeInt(min = 1, max = 1000000)
+    @RangeInt(min = 1, max = 256)
     public static int wandBatchSize = 16;
+
     // --- Modular Machinery Acceleration ---
 
     @Name("MM Acceleration Enabled")

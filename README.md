@@ -66,6 +66,7 @@ A Matter-Condenser-style block that converts materials into Time Fluid:
 An AE-powered, 512-byte **fluid storage cell** that holds only Time Fluid (modeled on the Matter Cannon's item inheritance):
 
 - **Right-click a block (shift)**: accelerates it once, consuming **10 mB of Time Fluid + 1000 AE** from the wand's own cell. Speed is determined by the installed Speed Cards (via the AE2 cell workbench) through the independent `wandSpeedMultipliers` config.
+  - **On a Modular Machinery (CE) controller** (with `MM Acceleration Enabled`): the currently running recipe is accelerated until it finishes - recipe duration shrinks to 1/speed and per-tick energy cost/production scale accordingly (as governed by `MM Energy Cost Follows Speed`, keeping total energy per recipe constant); MM auto-restores normal speed when the recipe finishes (or fails), leaving no persistent state, and clicking an idle machine costs nothing (with a status message).
 - **Right-click an ME Import/Export Bus**: performs a **batch transfer** — consumes the same cost, then runs the bus's work `wandBatchSize` (default 16) times, so one click moves many stacks into/out of the ME network. A particle burst shows the effect (server-side transfer, client-side particles).
 - **Fluid terminal / GUI interaction**: works as a regular fluid container — fill it from tanks, empty it into machines, and it shows the usual bytes/types tooltip in the inventory.
 

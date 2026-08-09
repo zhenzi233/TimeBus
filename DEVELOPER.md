@@ -80,7 +80,7 @@ src/main/java/com/zhenzi233/timebus/
 
 > 反加速机器：**Modular Machinery（CE）** 的 `TileEntityRestrictedTick` 系列 `update()` 是 final 且同 tick 去重，连调无效，走配方时长压缩（`ModularMachineryAccelerator` 向 RecipeThread 注入 duration modifier，总消耗不变，倍率跟随总线速度卡：0卡=2x…满配=32x），默认关闭 opt-in。
 >
-> **多总线叠加（v1.0.6）**：每个加速源（时间总线 / 时间杖）用独立 modifier key（`timebus_duration_accel:<源>`，总线源 = 自身方块坐标），MM 对多个乘算 modifier 连乘，总倍率 = 各总线速度的**乘积**（如 8x + 4x = 32x），同速总线幂等不重复注入。`sourceKey` 由调用方传入 `runTileUpdates/accelerateOnce`。**拆除清理**：时间总线被移除时 `removeFromWorld()` 调 `ModularMachineryAccelerator.restoreAllForSource` 恢复自己注入过的所有控制器（内部用 WeakHashMap 登记 源→(控制器位置,key)），避免 modifier 残留并写进存档。
+> **多总线叠加（v1.0.6）**：每个加速源（时间总线）用独立 modifier key（`timebus_duration_accel:<源>`，v1.0.9 起总线源 = 自身方块坐标 + part 所在面，同线缆多总线不再互相覆盖），MM 对多个乘算 modifier 连乘，总倍率 = 各总线速度的**乘积**（如 8x + 4x = 32x），同速总线幂等不重复注入。`sourceKey` 由调用方传入 `runTileUpdates/accelerateOnce`。**拆除清理**：时间总线被移除时 `removeFromWorld()` 调 `ModularMachineryAccelerator.restoreAllForSource` 恢复自己注入过的所有控制器（内部用 WeakHashMap 登记 源→(控制器位置,key)），避免 modifier 残留并写进存档。**时间杖走 semi-permanent（v1.0.9）**：只给"正在运行配方"的线程注入 `semiPermanentModifiers`（配方时长 ×1/speed + 能耗 ×speed，`applyWandToActiveRecipes`），MM 在配方完成/失败时自动清空该表——加速只持续到当前进度完成，之后自动恢复，且不写进存档。
 
 ## 3. 时间杖（ItemTimeWand）
 
@@ -90,7 +90,7 @@ src/main/java/com/zhenzi233/timebus/
 
 | 操作 | 行为 |
 |---|---|
-| 潜行右键方块 | 消耗 10 mB 时间流体 + 1000 AE，`accelerateOnce` 加速一次（speed 由加速卡决定） |
+| 潜行右键方块 | 消耗 10 mB 时间流体 + 1000 AE，`accelerateOnce` 加速一次（speed 由加速卡决定）；目标是 MM 控制器时走 `ModularMachineryAccelerator.applyWandToActiveRecipes` 注入 semi-permanent modifier，当前配方以倍率加速直到完成（空闲不扣费） |
 | 潜行右键 ME 输出/输入总线 | 消耗同量资源，执行总线 `tickingRequest` × `wandBatchSize`（默认 16）次 = 一次性批量传输 |
 | cell workbench | 可放入加速卡（`Upgrades.SPEED` 已注册，上限 4） |
 | 右键空气 | 无行为（后续可扩展） |
@@ -117,7 +117,7 @@ src/main/java/com/zhenzi233/timebus/
 | `capacityWidths` | `"1,3,9,15"` | 容量卡宽度（逗号分隔字符串，解析一次并缓存） |
 | `maxCallsPerTick` | 128 | 工作预算（调用次数/ tick） |
 | `matterBallUnit` / `singularityUnit` / `unitsPerBatch` / `timeFluidPerBatch` | 1/1000/64000/1000 | 发生器换算 |
-| `wandBytes` | `512` | 时间杖存储单元字节数（1 字节 = 1000 mB 时间流体） |
+| `wandBytes` | `512` | 时间杖存储单元字节数（AE2EL 流体单元 1 字节 = 8000 mB，512 字节 ≈ 4096 桶） |
 | `wandSpeedMultipliers` | `"2,4,8,16,32"` | 时间杖加速卡倍率（逗号分隔字符串，解析一次并缓存，独立于总线） |
 | `wandFluidCost` / `wandEnergyCost` | 10 / 1000 | 时间杖单次消耗 |
 | `wandBatchSize` | 16 | 总线批量传输的批次次数 |

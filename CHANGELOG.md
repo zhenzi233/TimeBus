@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.0.9
+
+Code-review fixes (2026-08-09 review report):
+
+- Fix: multiple Time Buses on the same cable no longer overwrite / wrongly
+  clear each other's MM acceleration - the modifier source key now includes the
+  part side; legacy side-less bus modifiers are purged automatically on upgrade
+- Fix: the Time Wand no longer leaves MM controllers permanently accelerated -
+  a wand click now accelerates the currently running recipe until it finishes
+  via MM's semi-permanent modifiers (recipe duration x1/speed, per-tick energy
+  x speed when `MM Energy Cost Follows Speed` is on); MM auto-restores normal
+  speed when the recipe finishes or fails, so nothing is written permanently
+  into the save, and idle machines are not charged
+- Fix: injected MM modifiers are cleaned up when a single chunk unloads (they
+  were previously written into the save and survived a server restart)
+- Perf: MM acceleration skips the per-tick reflection sweep in steady state
+  (state snapshot + the existing periodic force-refresh self-heals within one
+  `MM Context Refresh Interval`)
+- Perf: `TileCharger.doWork()` switched from cached reflection to a Mixin
+  `@Invoker`; the Time Bus source key string is now lazily cached
+- Balance: wand bus-batch size is capped at 256 (config range + runtime clamp);
+  random-tick acceleration per speed unit is now configurable
+  (`Random Tick Calls per Speed Unit`, default 20)
+- Fix: Time Wand fluid capacity display was 8x too small (AE2EL stores
+  8000 mB per byte, not 1000)
+- Docs: corrected the `Power Cost per Speed Unit` comment to match the actual
+  formula; updated wand byte/mB documentation; debug logs for swallowed config
+  exceptions; MM state caches are cleaned up on restore
+
 ## v1.0.8
 
 - MM acceleration: energy cost now follows the speed-up (new `MM Energy Cost Follows Speed`, default true) - per-tick energy consumption and production are multiplied by the same factor as the duration compression, so total energy per recipe stays constant while the output rate increases

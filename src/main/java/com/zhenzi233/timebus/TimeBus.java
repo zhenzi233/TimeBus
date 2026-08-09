@@ -17,6 +17,7 @@ import net.minecraft.block.Block;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.event.world.WorldEvent;
+import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLServerStoppingEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -143,5 +144,18 @@ public class TimeBus {
         public static void onWorldUnload(final WorldEvent.Unload event) {
             ModularMachineryAccelerator.restoreAllForWorld(event.getWorld());
         }
+
+        /**
+         * 区块单独卸载时兜底清理：世界还在运行、某个区块被卸载时，如果不清理，
+         * 注入的 MM modifier 会随区块存档写入磁盘，重启后机器永久加速。
+         * （见代码审查 4.2；世界整体卸载仍由 onWorldUnload 兜底。）
+         */
+        @SubscribeEvent
+        public static void onChunkUnload(final ChunkEvent.Unload event) {
+            if (event.getWorld() != null && !event.getWorld().isRemote) {
+                ModularMachineryAccelerator.restoreAllForChunk(event.getWorld(), event.getChunk());
+            }
+        }
+
     }
 }

@@ -11,6 +11,8 @@ import appeng.parts.automation.PartImportBus;
 import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.config.TimeBusConfig;
 import com.zhenzi233.timebus.util.AccelerateHelper;
+import com.zhenzi233.timebus.util.ModularMachineryAccelerator;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumParticleTypes;
@@ -102,6 +104,20 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         return Math.max(1, multipliers[idx]);
     }
 
+    /**
+     * MM 机器上的加速倍率：跟随时间总线的 {@code Speed Multipliers}
+     * （0 卡 = 2x，满配 = 32x），而不是魔杖独立的 wandSpeedMultipliers——
+     * 用户按"时间总线倍率"的直觉配置，魔杖自己那套可能起步更高。
+     */
+    private int getWandMmSpeed(final ItemStack stack) {
+        final int[] multipliers = TimeBusConfig.getSpeedMultipliers();
+        if (multipliers.length == 0) {
+            return 1;
+        }
+        final int idx = Math.min(getCardCount(stack), multipliers.length - 1);
+        return Math.max(1, multipliers[idx]);
+    }
+
     @Override
     public EnumActionResult onItemUse(final EntityPlayer player, final net.minecraft.world.World worldIn,
                                       final BlockPos pos, final EnumHand hand, final net.minecraft.util.EnumFacing facing,
@@ -147,6 +163,26 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             return handleBusBatch(worldIn, pos, facing, player, hand);
         }
 
+        // Shift + right-click on an MM (CE) controller: accelerate the currently
+        // running recipe until it finishes (recipe duration x1/speed, per-tick
+        // energy x speed when enabled), then MM auto-restores normal speed.
+        // Injected as semi-permanent modifiers, which MM clears on recipe finish
+        // or failure - nothing is written permanently into the save (code
+        // review Bug 2). An idle machine is not charged.
+        final TileEntity targetTE = worldIn.getTileEntity(pos);
+        if (TimeBusConfig.mmAccelerationEnabled && targetTE != null
+                && ModularMachineryAccelerator.isController(targetTE)) {
+            if (!ModularMachineryAccelerator.hasActiveRecipes(targetTE)) {
+                sendNoActiveRecipe(player);
+                return EnumActionResult.FAIL;
+            }
+            if (!tryConsumeCosts(player, stack)) {
+                return EnumActionResult.FAIL;
+            }
+            ModularMachineryAccelerator.applyWandToActiveRecipes(targetTE,
+                    "wand:" + player.getUniqueID(), getWandMmSpeed(stack));
+            return EnumActionResult.SUCCESS;
+        }
 
         // Consume AE power + Time Fluid (simulate first, commit only if both are available).
         if (!tryConsumeCosts(player, stack)) {
@@ -154,8 +190,10 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         }
 
         // Accelerate the target block once. (Particles are rendered by the
-        // client branch of onItemUse.)
-        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack), "wand");
+        // client branch of onItemUse.) The source key is per player so different
+        // players' wands stack on the same machine instead of overwriting each
+        // other (MM modifier key collision - see code review Bug 2).
+        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack), "wand:" + player.getUniqueID());
         return EnumActionResult.SUCCESS;
     }
     /**
@@ -196,6 +234,13 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
     private void sendBusIdle(final EntityPlayer player) {
         if (player != null) {
             player.sendStatusMessage(new TextComponentTranslation("msg.timebus.bus_idle"), true);
+        }
+    }
+
+    /** Report that the targeted MM controller has no running recipe. */
+    private void sendNoActiveRecipe(final EntityPlayer player) {
+        if (player != null) {
+            player.sendStatusMessage(new TextComponentTranslation("msg.timebus.no_active_recipe"), true);
         }
     }
     /**
@@ -295,7 +340,10 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         commitCosts(stack);
 
         // Batch: run the remaining bus work calls (the probe already did one).
-        final int n = Math.max(1, TimeBusConfig.wandBatchSize);
+        // Clamp as a defensive backstop: the config range is already capped, but
+        // an old cfg file may still hold a huge value; a single-tick naked loop
+        // must never be allowed to stall the server (see code review 3.4).
+        final int n = Math.max(1, Math.min(TimeBusConfig.wandBatchSize, 256));
         for (int i = 1; i < n; i++) {
             try {
                 bus.tickingRequest(null, 1);
@@ -464,7 +512,10 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
                 return new IFluidTankProperties[0];
             }
             final ICellInventory<IAEFluidStack> inv = cell.getCellInv();
-            final long capacity = inv == null ? 0 : inv.getTotalBytes() * 1000;
+            // AE2EL fluid cells store 8000 mB per byte (IStorageChannel.getUnitsPerByte);
+            // the old hardcoded *1000 showed a capacity 8x too small (code review 4.5).
+            final long capacity = inv == null ? 0 : inv.getTotalBytes()
+                    * AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class).getUnitsPerByte();
             FluidStack contents = null;
             final IAEFluidStack first = cell.getAvailableItems(
                     AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class).createList()).getFirstItem();

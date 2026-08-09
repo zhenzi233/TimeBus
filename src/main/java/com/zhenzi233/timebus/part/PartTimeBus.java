@@ -103,6 +103,11 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     private int budgetTotalLastTick = 0; // budget available last tick (for GUI)
     private boolean workDidSomething = false; // true if the last completed batch did real work
     private int idleTicks = 0;               // consecutive ticks with nothing to accelerate
+    // Lazy-cached MM modifier source key (host position + part side). The host
+    // position is fixed while the part is attached, so the concatenation is
+    // done once instead of every work tick.
+    private String cachedSourceKey = null;
+    private BlockPos cachedSourcePos = null;
 
     @Override
     public IItemHandler getInventoryByName(String name) {
@@ -126,13 +131,24 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         return this.getInstalledUpgrades(Upgrades.SPEED);
     }
 
-    /** Stable per-part identity used as the MM duration-modifier source key. */
+    /**
+     * Stable per-part identity used as the MM duration-modifier source key.
+     *
+     * <p>Must include the part's side: one AE2 cable can hold up to 6 parts on
+     * different faces, and without the side two Time Buses on the same cable
+     * would share one modifier key - overwriting each other's multiplier and
+     * clearing the other bus's modifier when either one is removed.
+     */
     private String getSourceKey() {
         if (getHost() == null || getHost().getTile() == null) {
             return "bus:unknown";
         }
         final BlockPos pos = getHost().getTile().getPos();
-        return "bus:" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
+        if (cachedSourceKey == null || !pos.equals(cachedSourcePos)) {
+            cachedSourceKey = "bus:" + pos.getX() + "," + pos.getY() + "," + pos.getZ() + ":" + getSide().name();
+            cachedSourcePos = pos;
+        }
+        return cachedSourceKey;
     }
 
     @Override
@@ -192,6 +208,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         try {
             return getRSMode() == RedstoneMode.SIGNAL_PULSE;
         } catch (Exception e) {
+            TimeBus.LOGGER.debug("Time Bus: isPulseMode failed, defaulting to false: {}", e.toString());
             return false;
         }
     }
@@ -205,6 +222,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         try {
             rsMode = getRSMode();
         } catch (Exception e) {
+            TimeBus.LOGGER.debug("Time Bus: isSleeping failed, defaulting to awake: {}", e.toString());
             return false;
         }
         if (rsMode == null) {
@@ -412,7 +430,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         // Move on to random ticks if this block uses them and we have not done so yet.
         if (workPhase != PHASE_RANDOM && targetBlock.getTickRandomly()) {
             workPhase = PHASE_RANDOM;
-            workPhaseRemaining = Math.max(1, speed * 20);
+            workPhaseRemaining = Math.max(1, speed * TimeBusConfig.randomTickCallsPerSpeed);
             return;
         }
         workBlockIndex++;
