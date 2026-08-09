@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.8
+
+- MM acceleration: energy cost now follows the speed-up (new `MM Energy Cost Follows Speed`, default true) - per-tick energy consumption and production are multiplied by the same factor as the duration compression, so total energy per recipe stays constant while the output rate increases
+- MM acceleration: fixed threads staying unaccelerated after MM recycles its pooled recipe crafting contexts (the modifier data was correct but the actual context had lost it) - the Time Bus now force re-applies modifiers every `MM Context Refresh Interval` ticks (default 100 = about 5 seconds, 0 disables), self-healing within one interval
+
 ## v1.0.7
 
 - Time Fluid Generator: consumes up to 64 inputs per update (configurable via `Inputs Consumed per Update`), so Time Bus acceleration now actually speeds it up; the input slot stacks up to 64
