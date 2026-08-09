@@ -51,6 +51,12 @@ public final class MekanismAccelerator {
 
     /** UpgradeModifier（maxUpgradeMultiplier）缓存，默认 10；解析成功后覆盖。 */
     private static volatile double maxUpgradeMultiplier = 10.0;
+    /**
+     * SPEED 升级的最大安装数（Upgrade.SPEED.getMaxInstalled() 的动态来源：
+     * MEKCEConfig.MAXSpeedUpgrade，默认 8、可配置、改配置需重启）。写死 8 会在
+     * 玩家调大 MAXSpeedUpgrade 后导致虚拟卡换算分母不匹配（代码审查建议项）。
+     */
+    private static volatile int maxSpeedUpgrade = 8;
     private static volatile boolean configResolved;
 
     /** True if the tile is a Mekanism (CE-Unofficial) machine. */
@@ -78,7 +84,13 @@ public final class MekanismAccelerator {
             if (existing != null && existing.tick == tick) {
                 return false;
             }
+            final boolean changed = existing == null || existing.speed != speed;
             byPos.put(pos, new AccelState(speed, tick));
+            if (changed) {
+                // 验证用日志：首次登记或倍率变化时打印实际倍率与虚拟卡数。
+                TimeBus.LOGGER.info("Time Bus: Mek accel registered speed={} at {} (virtual cards: {})",
+                        speed, pos, virtualCards(speed));
+            }
             return true;
         }
     }
@@ -104,8 +116,11 @@ public final class MekanismAccelerator {
     /**
      * 虚拟速度卡数：让 fraction(SPEED) 增加 ln(speed)/ln(M)，使配方时长缩短
      * {@code speed} 倍（公式：ticks = base * M^(-fraction)）。返回叠加在
-     * getInstalledUpgrades(SPEED) 上的卡数，允许超出 8 卡上限——fraction 公式
+     * getInstalledUpgrades(SPEED) 上的卡数，允许超出最大卡数——fraction 公式
      * 对大于 1 的 fraction 依然成立。
+     *
+     * <p>向上取整（ceil）保证实际倍率至少达到 {@code speed}（round 会略低，
+     * 如默认配置下 2x 只到约 1.78x）。
      */
     public static int virtualCards(final int speed) {
         if (speed <= 1) {
@@ -113,8 +128,11 @@ public final class MekanismAccelerator {
         }
         resolveConfig();
         final double m = maxUpgradeMultiplier;
-        final int max = 8; // Upgrade.SPEED.getMaxInstalled()
-        return (int) Math.round(Math.log(speed) / Math.log(m) * max);
+        final int max = maxSpeedUpgrade;
+        if (m <= 1.0 || max <= 0) {
+            return 0;
+        }
+        return (int) Math.ceil(Math.log(speed) / Math.log(m) * max);
     }
 
     private static void resolve() {
@@ -137,7 +155,12 @@ public final class MekanismAccelerator {
         }
     }
 
-    /** 反射读取 MekanismConfig.current().general.maxUpgradeMultiplier.val()，失败回退默认 10。 */
+    /**
+     * 反射读取 Mek 配置：
+     * {@code MekanismConfig.current().general.maxUpgradeMultiplier.val()}（时长/能耗公式基数 M）
+     * 和 {@code MekanismConfig.current().mekce.MAXSpeedUpgrade.val()}（SPEED 最大安装数）。
+     * 失败回退默认 10 / 8。
+     */
     private static void resolveConfig() {
         if (configResolved) {
             return;
@@ -156,11 +179,20 @@ public final class MekanismAccelerator {
                 final Object optionObj = option.get(generalConfig);
                 final Method val = optionObj.getClass().getMethod("val");
                 maxUpgradeMultiplier = ((Number) val.invoke(optionObj)).doubleValue();
+
+                final Field mekce = configClass.getField("mekce");
+                final Object mekceConfig = mekce.get(config);
+                final Field maxSpeedOption = mekceConfig.getClass().getField("MAXSpeedUpgrade");
+                final Object maxSpeedObj = maxSpeedOption.get(mekceConfig);
+                final Method valInt = maxSpeedObj.getClass().getMethod("val");
+                maxSpeedUpgrade = ((Number) valInt.invoke(maxSpeedObj)).intValue();
             } catch (Exception e) {
-                TimeBus.LOGGER.warn("Time Bus: could not read Mek maxUpgradeMultiplier, using 10: {}", e.toString());
+                TimeBus.LOGGER.warn("Time Bus: could not read Mek config, using defaults: {}", e.toString());
             } finally {
                 configResolved = true;
             }
+            TimeBus.LOGGER.info("Time Bus: Mek config resolved: maxUpgradeMultiplier={}, maxSpeedUpgrade={}",
+                    maxUpgradeMultiplier, maxSpeedUpgrade);
         }
     }
 }

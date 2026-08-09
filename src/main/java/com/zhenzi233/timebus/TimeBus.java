@@ -30,13 +30,16 @@ import net.minecraftforge.fml.common.registry.GameRegistry;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-@Mod(modid = TimeBus.MOD_ID, name = TimeBus.MOD_NAME, version = TimeBus.VERSION,
+@Mod(modid = Reference.MOD_ID, name = Reference.MOD_NAME, version = Reference.VERSION,
      dependencies = "required-after:appliedenergistics2@[rv6-stable-7,);")
 public class TimeBus {
 
-    public static final String MOD_ID = "timebus";
-    public static final String MOD_NAME = "Time Bus";
-    public static final String VERSION = "1.0.5";
+    // 版本等元数据统一由 java-templates/Reference.java（blossom 注入 gradle.properties
+    // 的 mod_version）提供；这里不再写死，避免构建产物 @Mod 版本与文件名/mcmod.info
+    // 不一致（此前 VERSION 停留在 1.0.5 导致服务器要求客户端装 1.0.5）。
+    public static final String MOD_ID = Reference.MOD_ID;
+    public static final String MOD_NAME = Reference.MOD_NAME;
+    public static final String VERSION = Reference.VERSION;
 
     public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
 

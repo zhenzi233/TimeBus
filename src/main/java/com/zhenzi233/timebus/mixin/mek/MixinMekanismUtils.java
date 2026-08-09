@@ -1,6 +1,7 @@
 package com.zhenzi233.timebus.mixin.mek;
 
 import com.zhenzi233.timebus.config.TimeBusConfig;
+import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.util.MekanismAccelerator;
 import mekanism.common.Upgrade;
 import mekanism.common.base.IUpgradeTile;
@@ -34,7 +35,11 @@ public abstract class MixinMekanismUtils {
         if (upgrade == Upgrade.SPEED && TimeBusConfig.mekAccelerationEnabled) {
             final Integer speed = MekanismAccelerator.queryActive((TileEntity) tile);
             if (speed != null && speed > 1) {
-                return base + MekanismAccelerator.virtualCards(speed);
+                final int virtual = MekanismAccelerator.virtualCards(speed);
+                // 验证用日志（debug 级别，latest.log 不刷屏；验证完成后移除）。
+                TimeBus.LOGGER.debug("Time Bus: Mek mixin hit: base speed cards={}, virtual={}, total={} at {}",
+                        base, virtual, base + virtual, ((TileEntity) tile).getPos());
+                return base + virtual;
             }
         }
         return base;

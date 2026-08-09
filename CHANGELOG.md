@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.10
+
+- Fix: mod version is now sourced from `gradle.properties` via the `Reference`
+  template - `TimeBus.java` previously hardcoded 1.0.5, so servers reported
+  "Requires version 1.0.5" (and clients without the mod were rejected) even
+  though the jar file was named 1.0.9
+- Mekanism: virtual speed cards now use the real max installed count
+  (`MEKCEConfig.MAXSpeedUpgrade`, default 8, configurable) instead of a
+  hardcoded 8, and are rounded up (`ceil`) so the actual speed-up is at least
+  the configured multiplier (previously 2x could resolve to only ~1.78x)
+- Mekanism: added verification logs (config resolve / registration / mixin hit)
+  to be removed after validation
+- Time Wand: left a TODO placeholder for future Mek recipe acceleration
+
 ## v1.0.9
 
 Code-review fixes (2026-08-09 review report):

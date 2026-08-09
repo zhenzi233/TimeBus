@@ -183,6 +183,9 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
                     "wand:" + player.getUniqueID(), getWandMmSpeed(stack));
             return EnumActionResult.SUCCESS;
         }
+        // TODO(Mek): 魔杖对 Mek 机器目前只有约 0.5 秒的加速效果（活跃表 10 tick
+        // 新鲜窗口，魔杖一次性点击不持续注册）。后续参考 MM 的 semi-permanent
+        // 方案，对 Mek 做"当前配方加速到完成"的特化，此处预留分支位置。
 
         // Consume AE power + Time Fluid (simulate first, commit only if both are available).
         if (!tryConsumeCosts(player, stack)) {
