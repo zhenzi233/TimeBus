@@ -378,3 +378,11 @@ MM 注入配方时长 modifier 时曾把构造器第一个参数（RequirementTy
 
 - 用日志定位：`run/client/logs/latest.log` 中 `Could not find requirementType !`（空 type）+ NPE 堆栈（`FactoryRecipeThread.deserialize → ConcurrentHashMap.putAll`）直接指向反序列化路径，比猜快得多。
 - 验证外部报告（AI 生成的优化/兼容性报告）时逐条对照实际字节码；报告与代码冲突以代码为准（本系列报告多处不准：onUpdate"已移除"、配方时长 0.8^n 公式、EnableUpgradeConfigure 描述等，均以 javap 反汇编结果修正）。
+
+### 10.7 Mek 虚拟速度卡（Mekanism-CE-Unofficial）
+
+- 反加速闸门：`TileEntityRestrictedTick.update()` final + 世界 tick 去重，ITickable 连拍无效；不走 doRestrictedTick 反射（异步任务堆积 + 能量不一致风险），改用虚拟速度卡。
+- 原理：`MekanismUtils.fractionUpgrades(tile, SPEED)` 同时驱动配方时长（ticks = base × M^(-fraction)）与能耗（perTick = base × M^(2·fraction(SPEED) - fraction(ENERGY))），M = UpgradeModifier（默认 10）。给 SPEED 卡数加虚拟值即让机器按官方公式自行加速：时长 ÷M^Δ、每 tick 能耗 ×M^(2Δ)、单次配方总耗电 ×M^Δ（与真实速度卡体验一致，能耗非守恒是 Mek 原生平衡）。
+- 实现：Mixin @Redirect `MekanismUtils.fractionUpgrades` 内的 `getInstalledUpgrades(SPEED)` 调用点（targets 字符串 + required=false 条件配置）；TimeBus 每 tick 扫描时把 (world, pos, speed) 登记进 `MekanismAccelerator` 活跃表（WeakHashMap + synchronized，兼容 Mek 异步任务线程），查询校验 10 tick 新鲜度，总线移走自动失效。
+- 虚拟卡数 = round(ln(speed) / ln(M) × 8)，M 反射读 `MekanismConfig.current().general.maxUpgradeMultiplier.val()`，失败回退 10。fraction 允许大于 1（公式数学上成立），因此虚拟卡可超出 8 卡上限实现任意倍率。
+- 配置：`Mek Acceleration Enabled`（默认 false）；开关关闭时活跃表不登记，Mixin 直接返回真实卡数。

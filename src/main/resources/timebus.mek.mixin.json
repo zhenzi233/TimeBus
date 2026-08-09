@@ -1,0 +1,13 @@
+{
+    "required": false,
+    "package": "com.zhenzi233.timebus.mixin.mek",
+    "compatibilityLevel": "JAVA_8",
+    "target": "@env(MOD)",
+    "client": [],
+    "mixins": [
+        "MixinMekanismUtils"
+    ],
+    "server": [],
+    "setSourceFile": true,
+    "minVersion": "0.8.7"
+}

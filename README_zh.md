@@ -142,6 +142,12 @@ gradlew.bat build
 | `MM Energy Cost Follows Speed` | `true` | 加速时每 tick 能耗（消耗与产出）按加速倍数放大：时长缩短 N 倍、能耗放大 N 倍，单次配方总耗电/总产出守恒 |
 | `MM Context Refresh Interval` | `20` | MM context 池化脱节的自愈间隔（tick）：每 N tick 强制重注入 modifier 触发 MM 刷新，20 ≈ 1 秒；0 = 关闭（线程可能保持不加速直到速度变化） |
 
+### Mekanism（可选）
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Mek Acceleration Enabled` | `false` | 是否对 Mek 机器注入虚拟速度卡加速：配方按 Mek 官方公式加速（每 tick 能耗随速度卡公式上升、总耗电随加速倍数缩放，与真实速度卡体验一致） |
+
 ## 使用方式
 
 1. 将时间总线放置在 AE2 线缆/总线网络的任意一侧。

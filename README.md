@@ -137,6 +137,12 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | `MM Energy Cost Follows Speed` | `true` | Scale per-tick energy cost and production by the same factor as the speed-up: duration x1/N and energy xN, keeping total energy per recipe constant |
 | `MM Context Refresh Interval` | `20` | Self-heal interval (ticks) for MM context-pool desync: force re-applies modifiers every N ticks to trigger an MM refresh, 20 = 1 second; 0 = disabled (threads may stay unaccelerated until the speed changes) |
 
+### Mekanism (optional)
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `Mek Acceleration Enabled` | `false` | Inject virtual speed cards into Mek machines: recipes run faster through Mek own formula (per-tick energy rises like real speed cards, total energy per recipe scales with the speed-up) |
+
 ## Usage
 
 1. Place the Time Bus on any side of an AE2 cable/bus network.

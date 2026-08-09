@@ -32,7 +32,9 @@ dependencies {
     // 编译期引用仅用于让 Mixin 注解处理器校验 targets（不打包、不强制运行时依赖）。
     modCompileOnly "curse.maven:modularmachinery-community-edition-817377:7372951"
     modRuntimeOnly "curse.maven:modularmachinery-community-edition-817377:7372951"
-    // Mekanism CE-Unofficial (CurseForge 840735) - 运行期软依赖（开发环境实测兼容性用）
+    // Mekanism CE-Unofficial (CurseForge 840735) - 运行期软依赖（虚拟速度卡 Mixin）；
+    // 编译期引用仅用于让 Mixin 注解处理器校验 targets（不打包、不强制运行时依赖）。
+    modCompileOnly "curse.maven:mekanism-ce-unofficial-840735:8519677"
     modRuntimeOnly "curse.maven:mekanism-ce-unofficial-840735:8519677"
 
     // The One Probe

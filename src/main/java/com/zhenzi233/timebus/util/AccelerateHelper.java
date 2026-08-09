@@ -44,6 +44,8 @@ public final class AccelerateHelper {
         IO_PORT,
         /** Modular Machinery (CE) controller: recipe-duration compression. */
         MM_CONTROLLER,
+        /** Mekanism (CE-Unofficial) machine: virtual speed card injection. */
+        MEK_MACHINE,
         /** Plain ITickable machine: update() spam. */
         ITICKABLE,
         /** Not acceleratable. */
@@ -69,6 +71,9 @@ public final class AccelerateHelper {
         }
         if (ModularMachineryAccelerator.isController(te)) {
             return TileKind.MM_CONTROLLER;
+        }
+        if (MekanismAccelerator.isMachine(te)) {
+            return TileKind.MEK_MACHINE;
         }
         if (te instanceof net.minecraft.util.ITickable) {
             return TileKind.ITICKABLE;
@@ -212,6 +217,18 @@ public final class AccelerateHelper {
                 } else {
                     // Feature switched off: remove this source's injected modifier.
                     ModularMachineryAccelerator.restore(targetTE, sourceKey);
+                }
+                return 0;
+            }
+
+            // Mekanism: final update() with world-tick deduplication makes update()
+            // spam useless; register the machine as accelerated so the Mixin on
+            // MekanismUtils.fractionUpgrades injects virtual speed cards instead.
+            case MEK_MACHINE: {
+                if (TimeBusConfig.mekAccelerationEnabled) {
+                    if (MekanismAccelerator.registerOnce(world, target, speed, world.getTotalWorldTime())) {
+                        return 1;
+                    }
                 }
                 return 0;
             }

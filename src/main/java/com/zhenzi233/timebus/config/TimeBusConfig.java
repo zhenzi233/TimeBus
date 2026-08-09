@@ -226,6 +226,18 @@ public class TimeBusConfig {
     @RangeInt(min = 0, max = 10000)
     public static int mmContextRefreshInterval = 20;
 
+    // --- Mekanism Acceleration ---
+
+    @Name("Mek Acceleration Enabled")
+    @Comment({
+        "If true, the Time Bus accelerates Mekanism (CE-Unofficial) machines by",
+        "injecting virtual speed cards: recipes run faster through Mek own formula",
+        "(per-tick energy rises like real speed cards, so total energy per recipe",
+        "scales with the speed-up). Requires Mekanism-CE-Unofficial; missing or",
+        "other versions are skipped softly. Default: false"
+    })
+    public static boolean mekAccelerationEnabled = false;
+
 
     // --- Parsed caches for the comma-separated list configs ---
     // The raw strings are parsed once and cached; the cache is invalidated on
