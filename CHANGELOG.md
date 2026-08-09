@@ -2,6 +2,10 @@
 
 ## v1.0.10
 
+- Fix: built with a Java 8 target (class 52) so vanilla Forge 1.12.2 clients can
+  load the mod - the previous Java 17 bytecode (class 61) was silently ignored
+  by Forge's ASM 5.2 mod discovery, leaving the client without the mod and
+  causing "mod is not found on client" when joining Cleanroom servers
 - Fix: mod version is now sourced from `gradle.properties` via the `Reference`
   template - `TimeBus.java` previously hardcoded 1.0.5, so servers reported
   "Requires version 1.0.5" (and clients without the mod were rejected) even

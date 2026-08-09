@@ -201,7 +201,10 @@ if (!enable_shadow.toBoolean()) {
 }
 
 compileJava {
-    sourceCompatibility = targetCompatibility = JavaVersion.VERSION_17
+    // 运行环境兼容性：1.12.2 原版 Forge 的 mod 发现用 ASM 5.2，只能解析
+    // class 52（Java 8）；Java 17 字节码（class 61）会被静默忽略导致客户端
+    // mod 列表缺失。编译工具链仍是 JDK 25，这里只把产物 target 降到 Java 8。
+    sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 jar {
@@ -251,7 +254,7 @@ tasks.named(remapTaskName).configure {
 }
 
 compileTestJava {
-    sourceCompatibility = targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 test {
