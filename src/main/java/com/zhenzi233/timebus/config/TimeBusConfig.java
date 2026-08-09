@@ -220,11 +220,11 @@ public class TimeBusConfig {
         "which triggers MM flushContextModifier). MM pools and reuses recipe",
         "crafting contexts, so the actually-applied modifiers can desync from",
         "the permanent modifier source; this periodic refresh heals that within",
-        "one interval. 100 ticks = 5 seconds. Set to 0 to disable (threads may",
-        "then stay unaccelerated until the speed changes). Default: 100"
+        "one interval. 20 ticks = 1 second. Set to 0 to disable (threads may",
+        "then stay unaccelerated until the speed changes). Default: 20"
     })
     @RangeInt(min = 0, max = 10000)
-    public static int mmContextRefreshInterval = 100;
+    public static int mmContextRefreshInterval = 20;
 
 
     // --- Parsed caches for the comma-separated list configs ---
