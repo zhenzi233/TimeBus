@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.7
+
+- Time Fluid Generator: consumes up to 64 inputs per update (configurable via `Inputs Consumed per Update`), so Time Bus acceleration now actually speeds it up; the input slot stacks up to 64
+- MM acceleration: the injected duration modifier now targets `REQUIREMENT_DURATION` (previously null), which makes acceleration actually take effect and fixes a client crash (`Could not find requirementType`) caused by serializing a modifier with an empty target
+- MM acceleration: removed the reflection-caching fast path - MM recycles idle factory threads (`invalidate()` clears permanent modifiers), which could leave threads permanently unaccelerated; back to per-tick verification
+- MM factory controllers: new `MM Keep Idle Threads` option (default true) - accelerated controllers skip the 200-tick idle-thread recycle so threads stay accelerated
+- dev: added Mekanism-CE-Unofficial runtime dependency for compatibility testing
+
 ## v1.0.6
 
 - MM acceleration now stacks: each Time Bus / wand injects its own per-source
