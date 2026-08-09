@@ -8,6 +8,9 @@
 # 说明：
 #   CurseForge 上传 API 有 Cloudflare 人机验证，Gradle 插件（CurseForgeGradle 1.1.28）
 #   的 Java HTTP 客户端 UA 会被拦截（403），因此用 curl + 浏览器 UA 直传。
+#   注意：v1.0.7 起 Cloudflare 升级为 JS 挑战（"Just a moment..."），纯 curl 也会被拦（403）。
+#   请改用 Puppeteer 方案：node gradle/scripts/publish-curseforge.js（需先 npm install puppeteer-core，
+#   见该脚本头部说明）。本脚本保留作为无挑战环境/历史参考。
 #   版本 ID（6756=1.12.2, 7498=Forge, 9638=Client, 9639=Server）是 CurseForge
 #   Minecraft 游戏内的全局固定 ID，与项目无关。
 #

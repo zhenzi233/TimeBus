@@ -327,7 +327,7 @@ Token 获取：Modrinth 在账号设置页生成（需要 `CREATE_VERSION` 权�
 ### 9.3 注意
 
 - **上传的是 remap 后的发布 jar**（`build/libs/timebus-<ver>.jar`，不带 `dev` 后缀），脚本已自动指向 `remapJar`，不要传 `-dev` 或 `-sources`。
-- **CurseForge 上传不走 Gradle 插件**：CurseForge 上传 API 有 Cloudflare 人机验证，插件（1.1.28，Java 8 编译）的 Apache HttpClient 默认 UA 会被拦（403）。已实测：浏览器 UA 可正常通过，新版插件的 `CurseForgeGradle (DarkhaxDev)` UA 也能过。因此 CurseForge 用 [publish-curseforge.ps1](gradle/scripts/publish-curseforge.ps1) 以 curl + 浏览器 UA 直传，版本 ID（1.12.2=6756、Forge=7498、Client=9638、Server=9639）已固化在脚本里。
+- **CurseForge 上传不走 Gradle 插件**：CurseForge 上传 API 有 Cloudflare 人机验证，插件（1.1.28，Java 8 编译）的 Apache HttpClient 默认 UA 会被拦（403）。v1.0.6 起 Cloudflare 升级为 JS 挑战（"Just a moment..."），纯 curl（含浏览器 UA）也会被拦（v1.0.7 实测 403）。现用 [publish-curseforge.js](gradle/scripts/publish-curseforge.js)（Puppeteer 驱动真实 Chrome，过挑战后在页面上下文内同源 fetch 上传，稳定 HTTP 200）：`node gradle/scripts/publish-curseforge.js`，需先 `npm install puppeteer-core`（本机装有 Chrome/Edge；也可用 CHROME_PATH 指定）。旧 [publish-curseforge.ps1](gradle/scripts/publish-curseforge.ps1) 保留作无挑战环境参考。版本 ID（1.12.2=6756、Forge=7498、Client=9638、Server=9639）与项目 ID（1638678）已固化在脚本里。
 - **CurseForgeGradle 插件版本上限 1.1.28**：1.2.30 起插件用 Java 25 编译，而本项目 Gradle 8.10 跑在 JDK 17 上会直接报 requires-at-least-JVM-runtime-version-25。以后升级 Gradle 到能跑 JDK 25 时，可改回插件（新版已设置能过 Cloudflare 的 UA）。
 - **环境标签**：CurseForge 2026-07-15 起强制要求环境标签，脚本/任务里已显式带上 Client、Server 环境版本。
 - **依赖关系**：AE2 UEL 主项目没发布在 Modrinth，只在 CurseForge 侧配置了 `ae2-extended-life` 必需依赖（slug/关系见发布脚本和任务）。
