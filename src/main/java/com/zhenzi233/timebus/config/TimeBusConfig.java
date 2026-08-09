@@ -204,6 +204,16 @@ public class TimeBusConfig {
     })
     public static boolean mmKeepThreadsEnabled = true;
 
+    @Name("MM Energy Cost Follows Speed")
+    @Comment({
+        "If true, machines accelerated by the Time Bus pay energy proportionally:",
+        "per-tick energy consumption (input) and production (output) are",
+        "multiplied by the same factor as the recipe-duration speed-up, so the",
+        "total energy per recipe stays the same while the output rate increases.",
+        "Requires MM Acceleration Enabled. Default: true"
+    })
+    public static boolean mmEnergyFollowsSpeed = true;
+
 
     // --- Parsed caches for the comma-separated list configs ---
     // The raw strings are parsed once and cached; the cache is invalidated on

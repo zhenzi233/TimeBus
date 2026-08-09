@@ -139,6 +139,7 @@ gradlew.bat build
 | --- | --- | --- |
 | `MM Acceleration Enabled` | `false` | 是否压缩 MM 控制器配方时长来加速（Mek 类受限 tick 机器不适用） |
 | `MM Keep Idle Threads` | `true` | 被时间总线加速的工厂控制器是否保留空闲线程：关闭 MM 的 200 tick 线程回收，避免回收清掉加速 modifier 导致线程短暂跌回原速 |
+| `MM Energy Cost Follows Speed` | `true` | 加速时每 tick 能耗（消耗与产出）按加速倍数放大：时长缩短 N 倍、能耗放大 N 倍，单次配方总耗电/总产出守恒 |
 
 ## 使用方式
 
