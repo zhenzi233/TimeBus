@@ -214,6 +214,18 @@ public class TimeBusConfig {
     })
     public static boolean mmEnergyFollowsSpeed = true;
 
+    @Name("MM Context Refresh Interval (ticks)")
+    @Comment({
+        "How often the Time Bus force re-applies its MM modifiers (remove+add,",
+        "which triggers MM flushContextModifier). MM pools and reuses recipe",
+        "crafting contexts, so the actually-applied modifiers can desync from",
+        "the permanent modifier source; this periodic refresh heals that within",
+        "one interval. 100 ticks = 5 seconds. Set to 0 to disable (threads may",
+        "then stay unaccelerated until the speed changes). Default: 100"
+    })
+    @RangeInt(min = 0, max = 10000)
+    public static int mmContextRefreshInterval = 100;
+
 
     // --- Parsed caches for the comma-separated list configs ---
     // The raw strings are parsed once and cached; the cache is invalidated on

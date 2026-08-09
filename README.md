@@ -135,6 +135,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | `MM Acceleration Enabled` | `false` | Whether to speed up MM controllers by compressing their recipe duration (does not apply to restricted-tick machines like Mek) |
 | `MM Keep Idle Threads` | `true` | Whether factory controllers currently accelerated by a Time Bus keep idle extra threads alive (disables MM 200-tick recycle, which clears the injected speed modifier and briefly drops the thread back to normal speed) |
 | `MM Energy Cost Follows Speed` | `true` | Scale per-tick energy cost and production by the same factor as the speed-up: duration x1/N and energy xN, keeping total energy per recipe constant |
+| `MM Context Refresh Interval` | `100` | Self-heal interval (ticks) for MM context-pool desync: force re-applies modifiers every N ticks to trigger an MM refresh, 100 = 5 seconds; 0 = disabled (threads may stay unaccelerated until the speed changes) |
 
 ## Usage
 

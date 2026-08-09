@@ -68,11 +68,10 @@ public final class ModularMachineryAccelerator {
      * 此时线程的 permanentModifiers 数据源仍持有我们的 modifier（幂等检查
      * 通过），但实际应用的 context 已丢失 —— 只有重新写入 modifier 触发
      * {@code flushContextModifier()} 才会把 permanent 刷回 context。因此
-     * 每 FORCE_REFRESH_INTERVAL tick 无条件重注入一次，保证 context 脱节
-     * 后最多一个间隔内自愈。
+     * 按配置的 mmContextRefreshInterval（0 = 关闭）周期性无条件重注入，
+     * 保证 context 脱节后最多一个间隔内自愈。
      */
     private static final Map<World, Map<BlockPos, Long>> LAST_FORCE_REFRESH = new WeakHashMap<>();
-    private static final long FORCE_REFRESH_INTERVAL = 100;
 
     private static volatile boolean resolved;
     private static volatile boolean available;
@@ -246,16 +245,20 @@ public final class ModularMachineryAccelerator {
         return !exact;
     }
 
-    /** 距上次强制刷新是否已达到间隔（达到则记录本次并返回 true）。 */
+    /** 距上次强制刷新是否已达到配置的间隔（达到则记录本次并返回 true；间隔 0 = 关闭）。 */
     private static boolean shouldForceRefresh(final TileEntity te) {
         if (te == null || te.getWorld() == null) {
+            return false;
+        }
+        final int interval = TimeBusConfig.mmContextRefreshInterval;
+        if (interval <= 0) {
             return false;
         }
         final long now = te.getWorld().getTotalWorldTime();
         synchronized (LAST_FORCE_REFRESH) {
             final Map<BlockPos, Long> byPos = LAST_FORCE_REFRESH.get(te.getWorld());
             final Long last = byPos == null ? null : byPos.get(te.getPos());
-            if (last != null && now - last < FORCE_REFRESH_INTERVAL) {
+            if (last != null && now - last < interval) {
                 return false;
             }
             LAST_FORCE_REFRESH.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
