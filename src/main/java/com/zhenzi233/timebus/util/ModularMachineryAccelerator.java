@@ -398,6 +398,10 @@ public final class ModularMachineryAccelerator {
             TimeBus.LOGGER.warn("Time Bus: MM restore failed at {}: {}", te.getPos(), e.toString());
         } finally {
             forgetInjected(te, sourceKey);
+            // 同时清掉"已应用"快照与强制刷新记录：否则重新 apply 时会被
+            // isAppliedState 快路径跳过，导致恢复加速后机器反而不加速。
+            forgetApplied(te, sourceKey);
+            forgetForceRefresh(te);
         }
     }
 

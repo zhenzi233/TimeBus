@@ -213,6 +213,25 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         }
     }
 
+    /**
+     * 总线进入"停止加速"状态（红石睡眠 / 断电 / 失活）时，撤销本总线已注入
+     * 到 MM 机器上的配方时长/能耗 modifier。
+     *
+     * <p>MM 加速是"注入持久 modifier"模式：apply() 写进 RecipeThread 的
+     * permanentModifiers 后不会自动消失，若只在总线侧停止 doWork，机器会
+     * 继续被加速（红石关闭无效）。restoreAllForSource 按 sourceKey 精确清理，
+     * 多总线叠加时只恢复本总线的部分。
+     */
+    private void restoreMMIfAny() {
+        try {
+            if (getHost() != null && getHost().getTile() != null) {
+                ModularMachineryAccelerator.restoreAllForSource(getHost().getTile().getWorld(), getSourceKey());
+            }
+        } catch (Exception e) {
+            TimeBus.LOGGER.debug("Time Bus: restoreMMIfAny failed: {}", e.toString());
+        }
+    }
+
     @Override
     protected boolean isSleeping() {
         if (this.getInstalledUpgrades(Upgrades.REDSTONE) <= 0) {
@@ -257,6 +276,11 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 doWork();
             }
         }
+        // 红石条件变为"应睡眠"（高电平无信号 / 低电平有信号）时撤销 MM modifier，
+        // 否则机器会残留加速。脉冲模式的批次结束由 tickingRequest 兜底。
+        if (isSleeping()) {
+            restoreMMIfAny();
+        }
         // Sync sleep state with tick manager (PartSharedItemBus pattern).
         try {
             if (!isSleeping()) {
@@ -278,6 +302,9 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 doWork();
             }
         }
+        if (isSleeping()) {
+            restoreMMIfAny();
+        }
         super.upgradesChanged();
     }
 
@@ -292,7 +319,17 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             return TickRateModulation.SLEEP;
         }
         if (!this.getProxy().isPowered() || !this.getProxy().isActive()) {
+            // 断电/失活时总线无法推进任何加速，撤销已注入的 MM modifier，
+            // 避免机器在总线未工作时仍被残留 modifier 加速。
+            restoreMMIfAny();
             return TickRateModulation.SLOWER;
+        }
+        // 红石条件不满足（高电平无信号 / 低电平有信号 / 脉冲批次已结束）时
+        // 停止工作并撤销 MM modifier。此分支是 onNeighborChanged 之外的兜底
+        // （如直接在 GUI 切换红石模式）。
+        if (isSleeping()) {
+            restoreMMIfAny();
+            return TickRateModulation.SLEEP;
         }
         extractAEPower(ticksSinceLastCall);
         doWork();
@@ -300,6 +337,8 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         // progress. As soon as it finishes, go back to sleep so the grid does
         // not keep polling an idle bus; the next redstone edge wakes it again.
         if (isPulseMode() && !workActive) {
+            // 本 tick 批次刚完成：立即恢复 MM 机器原速再入睡。
+            restoreMMIfAny();
             return TickRateModulation.SLEEP;
         }
         // Back off when nothing real happened for a while (no blocks in range,

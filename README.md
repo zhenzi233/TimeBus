@@ -15,7 +15,7 @@ An **Applied Energistics 2** addon for Minecraft 1.12.2 (CleanroomLoader) center
   - **Charger** (via its private `doWork()`), **Inscriber**, **Molecular Assembler**, **Vibration Chamber**, **IO Port**.
 - **Speed upgrade cards**: up to 4 speed cards, each multiplying the acceleration rate (`2,4,8,16,32x` by default). A bus with **no speed cards already accelerates at 2x** (the first configured multiplier), so acceleration starts at 2x, not 1x.
 - **Capacity upgrade cards**: up to 3 capacity cards, extending the acceleration range (`1,3,9,15` blocks by default).
-- **Redstone control**: high / low / pulse modes (requires 1 redstone card).
+- **Redstone control**: high / low / pulse modes (requires 1 redstone card); acceleration stops immediately when the redstone condition is not met or power is lost (MM machines included, and resumes automatically when the signal returns).
 - **Fuzzy mode**: AE2 fuzzy card support.
 - **Two fuel modes**:
   - **AE power** (default): draws AE energy from the ME network while accelerating.

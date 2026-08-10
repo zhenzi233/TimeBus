@@ -2,6 +2,15 @@
 
 ## v1.0.12
 
+- Fix: redstone / power loss now stops MM acceleration immediately - the Time
+  Bus used to leave its injected duration/energy modifiers on MM controllers
+  when it went to sleep (HIGH_SIGNAL with no signal, LOW_SIGNAL with signal,
+  a finished pulse batch, or lost power), so machines kept running accelerated
+  even though the bus was idle. Every stop path now restores the bus's own
+  modifiers (multi-bus stacking is unaffected - only this source's keys are
+  removed), and `restore()` also clears the applied-state snapshot so
+  re-acceleration works as soon as the redstone signal returns
+
 - Fix: Random Complement compatibility for the inscriber - RC's `setStackInSlot`
   redirect shrinks the same stack one more time, so the inscriber used to eat
   one extra input per finished recipe; with a single input left it also stopped
