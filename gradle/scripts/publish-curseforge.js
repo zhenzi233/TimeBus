@@ -85,7 +85,7 @@ const meta = {
     changelogType: 'markdown',
     displayName: `Time Bus v${version}`,
     gameVersions: [6756, 7498, 9638, 9639],
-    releaseType: 'release',
+    releaseType: 'beta',
     relations: { projects: [{ slug: 'ae2-extended-life', type: 'requiredDependency' }] },
 };
 const metaJson = JSON.stringify(meta);
