@@ -379,10 +379,20 @@ MM 注入配方时长 modifier 时曾把构造器第一个参数（RequirementTy
 - 用日志定位：`run/client/logs/latest.log` 中 `Could not find requirementType !`（空 type）+ NPE 堆栈（`FactoryRecipeThread.deserialize → ConcurrentHashMap.putAll`）直接指向反序列化路径，比猜快得多。
 - 验证外部报告（AI 生成的优化/兼容性报告）时逐条对照实际字节码；报告与代码冲突以代码为准（本系列报告多处不准：onUpdate"已移除"、配方时长 0.8^n 公式、EnableUpgradeConfigure 描述等，均以 javap 反汇编结果修正）。
 
-### 10.7 Mek 虚拟速度卡（Mekanism-CE-Unofficial）
+### 10.7 Mek 连拍加速（Mekanism-CE-Unofficial）
 
-- 反加速闸门：`TileEntityRestrictedTick.update()` final + 世界 tick 去重，ITickable 连拍无效；不走 doRestrictedTick 反射（异步任务堆积 + 能量不一致风险），改用虚拟速度卡。
-- 原理：`MekanismUtils.fractionUpgrades(tile, SPEED)` 同时驱动配方时长（ticks = base × M^(-fraction)）与能耗（perTick = base × M^(2·fraction(SPEED) - fraction(ENERGY))），M = UpgradeModifier（默认 10）。给 SPEED 卡数加虚拟值即让机器按官方公式自行加速：时长 ÷M^Δ、每 tick 能耗 ×M^(2Δ)、单次配方总耗电 ×M^Δ（与真实速度卡体验一致，能耗非守恒是 Mek 原生平衡）。
-- 实现：Mixin @Redirect `MekanismUtils.fractionUpgrades` 内的 `getInstalledUpgrades(SPEED)` 调用点（targets 字符串 + required=false 条件配置）；TimeBus 每 tick 扫描时把 (world, pos, speed) 登记进 `MekanismAccelerator` 活跃表（WeakHashMap + synchronized，兼容 Mek 异步任务线程），查询校验 10 tick 新鲜度，总线移走自动失效。
-- 虚拟卡数 = round(ln(speed) / ln(M) × 8)，M 反射读 `MekanismConfig.current().general.maxUpgradeMultiplier.val()`，失败回退 10。fraction 允许大于 1（公式数学上成立），因此虚拟卡可超出 8 卡上限实现任意倍率。
-- 配置：`Mek Acceleration Enabled`（默认 false）；开关关闭时活跃表不登记，Mixin 直接返回真实卡数。
+- 反加速闸门：`TileEntityRestrictedTick.update()` final + 世界 tick 去重，ITickable 连拍无效；不走 doRestrictedTick 反射（异步任务堆积 + 能量不一致风险），改为在配方推进调用点上循环调用。
+- **虚拟速度卡方案（已废弃，v1.0.12 起改用连拍）**：旧实现 Mixin @Redirect `MekanismUtils.fractionUpgrades` 内的 `getInstalledUpgrades(SPEED)` 调用，给 SPEED 卡数加虚拟值让机器按官方公式自行加速（时长 ÷M^Δ、每 tick 能耗 ×M^(2Δ)、总耗电 ×M^Δ）。**失效根因**：Mek CE 的配方时长实际由缓存字段 `ticksRequired` 决定（`CachedRecipe.setRequiredTicks(() -> ticksRequired)`），只在 `recalculateUpgradables`（升级变化/存档读取/网络同步）时用 `fractionUpgrades` 重算；加速期间没有任何路径触发重算，虚拟卡在稳态下不生效（仅 GUI 显示与重算瞬间生效）。
+- 原理（连拍）：`CachedRecipe.process()` 每次调用固定 `operatingTicks++`，且输入只在配方完成时扣除——同一 tick 内连续调用 N 次即可推进 N 刻。实现：Mixin @Redirect `TileEntityElectricMachine.onAsyncUpdateServer` 里的 `processRecipe()` 调用点，循环调用 N 次（N = 活跃表登记的 speed），每次 process 推进 1 刻。能耗随推进次数同倍放大（每 tick N × perTickEnergy）、单次配方总耗电守恒（与 MM 守恒方案一致，不同于 Mek 官方速度卡的 M^Δ 放大）。
+- 活跃表：TimeBus 每 tick 扫描时把 (world, pos, speed) 登记进 `MekanismAccelerator` 活跃表（WeakHashMap + synchronized，兼容 Mek 异步任务线程），Mixin 查询校验 10 tick 新鲜度，总线移走自动失效。
+- 配置：`Mek Acceleration Enabled`（默认 false）；开关关闭时活跃表不登记，Mixin 退化为单次调用。
+- 覆盖范围：当前只覆盖普通电机器（`TileEntityElectricMachine` 子类中未覆盖 `onAsyncUpdateServer` 的机器）；工厂/化学机器等有各自的 `onAsyncUpdateServer`/配方实现，需要按类别扩展。
+
+### 10.7.1 连拍 Mixin 的坑（v1.0.12 实录，踩过一遍）
+
+1. **@Redirect 的 target 类名必须是字节码符号引用的类，不是方法声明类**：`TileEntityElectricMachine.onAsyncUpdateServer` 里 `this.processRecipe()` 编译后符号引用是 `TileEntityElectricMachine.processRecipe()`（javac 按调用处静态类型生成），即使方法实际声明在父类 `TileEntityBasicMachine`——target 写父类会匹配不到调用点，注入**静默失效**（无报错、无效果）。用 `javap -v` 查常量池 `Methodref` 确认。
+2. **@Redirect handler 必须把调用目标实例作为第一个参数**（即使原方法无参）：无参 handler 报 `InvalidInjectionException: Not enough arguments: expected argument type ... at index 0`。
+3. **handler 参数类型必须与目标精确匹配，父类需要 @Coerce**：Mixin 0.8.7 运行时用 `Type.equals` 校验 handler 参数，`TileEntity` 会被拒（`Found unexpected type ...`）；加 `@Coerce` 注解后走可赋值检查（`canCoerce`），子类实例可传入父类参数。这样避免 import 精确 Mek 类型——`TileEntityElectricMachine` 继承链依赖 IC2 API（`IEnergyReceiver`），不在编译 classpath 上，import 会编译失败（`无法访问 IEnergyReceiver`）。
+4. **调 protected processRecipe 用反射**（`TileEntityBasicMachine.class.getDeclaredMethod("processRecipe")` + setAccessible，字符串类名避免 import）：每 tick N 次 invoke 开销可接受（先跑通再考虑 @Invoker）。
+5. **能耗语义**：连拍每 tick 扣 N 倍 `perTickEnergy`、时长 1/N，总耗电守恒；能量不足时 `calculateOperationsThisTick` 会限制推进（安全）。玩家感知与 Mek 官方速度卡（总耗电放大）不同，属预期。
+6. **Mixin 应用失败的日志**：`Mixin apply for mod main failed ... InvalidInjectionException`（WARN 级，required=false 配置下跳过不崩）——排查注入问题先搜这行，比看游戏内效果快。

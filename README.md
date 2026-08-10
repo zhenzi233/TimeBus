@@ -142,7 +142,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `Mek Acceleration Enabled` | `false` | Inject virtual speed cards into Mek machines: recipes run faster through Mek own formula (per-tick energy rises like real speed cards, total energy per recipe scales with the speed-up) |
+| `Mek Acceleration Enabled` | `false` | Re-run Mek machines' recipe tick multiple times per server tick: N extra ticks of progress per tick (N = bus speed multiplier, per-tick energy xN, total energy per recipe unchanged; currently covers ordinary ElectricMachine machines) |
 
 ## Usage
 

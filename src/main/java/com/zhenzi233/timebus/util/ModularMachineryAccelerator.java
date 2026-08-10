@@ -114,8 +114,6 @@ public final class ModularMachineryAccelerator {
     private static volatile Method addModifier;
     private static volatile Method removeModifier;
     private static volatile Method getActiveRecipe;
-    private static volatile Method getActiveTick;
-    private static volatile Method getActiveTotalTick;
     private static volatile Constructor<?> recipeModifierCtor;
     private static volatile Object ioInput;
     private static volatile Object ioOutput;
@@ -384,14 +382,19 @@ public final class ModularMachineryAccelerator {
                 if (thread != null) {
                     // 升级迁移：清除旧版总线/魔杖 permanent modifier（若之前开过并残留）。
                     purgeLegacyTimeBusKeys(thread);
+                    final Map<String, Object> permanent =
+                            (Map<String, Object>) getPermanentModifiers.invoke(thread);
+                    final int before = permanent.size();
                     removePermanentModifier.invoke(thread, durationKey);
                     removePermanentModifier.invoke(thread, energyInKey);
                     removePermanentModifier.invoke(thread, energyOutKey);
-                    removed++;
+                    removed += before - permanent.size();
                 }
             }
             if (removed > 0) {
-                TimeBus.LOGGER.info("Time Bus: MM restored source={} at {} ({} threads, tile {})",
+                // debug 级：restore 可能被周期性调用（断电/失活时每 20 tick 一次），
+                // 只有实际移除了 modifier 才输出，避免无意义的刷屏。
+                TimeBus.LOGGER.debug("Time Bus: MM restored source={} at {} (removed {} modifier(s), tile {})",
                         sourceKey, te.getPos(), removed, te.getClass().getSimpleName());
             }
         } catch (Exception e) {
@@ -580,24 +583,17 @@ public final class ModularMachineryAccelerator {
             if (threads == null || threads.length == 0) {
                 return false;
             }
-            TimeBus.LOGGER.debug("Time Bus: wand MM click speed={} at {}, {} thread(s)",
-                    speed, te.getPos(), threads.length);
             for (final Object thread : threads) {
                 if (thread == null) {
                     continue;
                 }
                 final Object active = getActiveRecipe.invoke(thread);
                 if (active == null) {
-                    TimeBus.LOGGER.debug("Time Bus:   thread {} idle (no active recipe)", thread.getClass().getSimpleName());
                     continue; // 只加速正在运行的配方；空闲线程不注入
                 }
                 // 升级迁移：先清旧版 permanent 残留（v1.0.8 及以前的魔杖/总线注入），
-                // 避免与 semi-permanent 连乘；同时打印注入前后的完整状态便于定位。
-                logTimeBusModifiers(thread, "before");
+                // 避免与 semi-permanent 连乘。
                 purgeLegacyTimeBusKeys(thread);
-                TimeBus.LOGGER.debug("Time Bus:   thread {} active tick={}/{}",
-                        thread.getClass().getSimpleName(),
-                        getActiveTick.invoke(active), getActiveTotalTick.invoke(active));
                 if (ensureSemiModifier(thread, durationKey, recipeDurationType, ioInput, durationTarget)) {
                     touched = true;
                 }
@@ -608,11 +604,6 @@ public final class ModularMachineryAccelerator {
                     if (ensureSemiModifier(thread, energyOutKey, recipeEnergyType, ioOutput, speed)) {
                         touched = true;
                     }
-                }
-            }
-            for (final Object thread : threads) {
-                if (thread != null) {
-                    logTimeBusModifiers(thread, "after");
                 }
             }
             if (touched) {
@@ -672,8 +663,6 @@ public final class ModularMachineryAccelerator {
                 final Class<?> activeRecipeClass = Class.forName(
                         "hellfirepvp.modularmachinery.common.crafting.ActiveMachineRecipe");
                 getActiveRecipe = recipeThreadClass.getMethod("getActiveRecipe");
-                getActiveTick = activeRecipeClass.getMethod("getTick");
-                getActiveTotalTick = activeRecipeClass.getMethod("getTotalTick");
                 recipeModifierCtor = modifierClass.getConstructor(
                         requirementTypeClass, ioTypeClass, float.class, int.class, boolean.class);
 
@@ -800,24 +789,6 @@ public final class ModularMachineryAccelerator {
             TimeBus.LOGGER.info("Time Bus: purged {} legacy permanent MM modifier key(s) {}", legacy.size(), legacy);
         }
         return legacy.size();
-    }
-
-    /** 诊断（debug 级）：打印线程 permanent / semi-permanent 表里所有 TimeBus 相关 modifier。 */
-    private static void logTimeBusModifiers(final Object thread, final String where) throws Exception {
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> permanent = (Map<String, Object>) getPermanentModifiers.invoke(thread);
-        for (final Map.Entry<String, Object> e : permanent.entrySet()) {
-            if (e.getKey().startsWith(MODIFIER_KEY_PREFIX) || e.getKey().startsWith(ENERGY_KEY_PREFIX)) {
-                TimeBus.LOGGER.debug("Time Bus:   [{}] permanent {} = {}", where, e.getKey(), getModifier.invoke(e.getValue()));
-            }
-        }
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> semi = (Map<String, Object>) getSemiPermanentModifiers.invoke(thread);
-        for (final Map.Entry<String, Object> e : semi.entrySet()) {
-            if (e.getKey().startsWith(MODIFIER_KEY_PREFIX) || e.getKey().startsWith(ENERGY_KEY_PREFIX)) {
-                TimeBus.LOGGER.debug("Time Bus:   [{}] semi {} = {}", where, e.getKey(), getModifier.invoke(e.getValue()));
-            }
-        }
     }
 
     private static boolean isAppliedState(final TileEntity te, final String sourceKey,

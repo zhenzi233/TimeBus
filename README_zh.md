@@ -147,7 +147,7 @@ gradlew.bat build
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `Mek Acceleration Enabled` | `false` | 是否对 Mek 机器注入虚拟速度卡加速：配方按 Mek 官方公式加速（每 tick 能耗随速度卡公式上升、总耗电随加速倍数缩放，与真实速度卡体验一致） |
+| `Mek Acceleration Enabled` | `false` | 是否连拍加速 Mek 机器：每 tick 额外推进 N 刻配方进度（N=总线速度倍率，每 tick 能耗同倍放大、单次配方总耗电守恒；当前覆盖普通电机器） |
 
 ## 使用方式
 

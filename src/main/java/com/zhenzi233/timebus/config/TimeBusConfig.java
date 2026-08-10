@@ -246,10 +246,10 @@ public class TimeBusConfig {
     @Name("Mek Acceleration Enabled")
     @Comment({
         "If true, the Time Bus accelerates Mekanism (CE-Unofficial) machines by",
-        "injecting virtual speed cards: recipes run faster through Mek own formula",
-        "(per-tick energy rises like real speed cards, so total energy per recipe",
-        "scales with the speed-up). Requires Mekanism-CE-Unofficial; missing or",
-        "other versions are skipped softly. Default: false"
+        "re-running the recipe tick multiple times per server tick (each extra",
+        "run advances one tick of progress and draws one tick of energy, so total",
+        "energy per recipe stays constant). Requires Mekanism-CE-Unofficial;",
+        "missing or other versions are skipped softly. Default: false"
     })
     public static boolean mekAccelerationEnabled = false;
 

@@ -2,6 +2,21 @@
 
 ## v1.0.12
 
+- Change: Mekanism acceleration now works by re-running the machine's recipe
+  tick multiple times per server tick instead of injecting virtual speed
+  cards - Mek CE caches `ticksRequired` and only recomputes it on upgrade
+  recalculation, so virtual speed cards had no effect while a machine was
+  running. The new approach advances N ticks of progress per tick (per-tick
+  energy xN, total energy per recipe unchanged) and currently covers ordinary
+  ElectricMachine-based machines
+- Change: Mek machine GUIs now report the accelerated per-tick energy draw
+  (base energyPerTick x speed) via Mek's own sync channel - display only, the
+  actual power drain is untouched
+- Fix: MM restore logs no longer spam - the "restored" log now counts actual
+  removed modifiers and is debug-level, so periodic restore calls (e.g. every
+  20 ticks while a bus is unpowered) stay silent unless something was really
+  removed
+
 - Fix: redstone / power loss now stops MM acceleration immediately - the Time
   Bus used to leave its injected duration/energy modifiers on MM controllers
   when it went to sleep (HIGH_SIGNAL with no signal, LOW_SIGNAL with signal,

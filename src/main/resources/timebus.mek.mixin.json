@@ -5,7 +5,8 @@
     "target": "@env(MOD)",
     "client": [],
     "mixins": [
-        "MixinMekanismUtils"
+        "MixinMekanismProcessRecipe",
+        "MixinMekanismSync"
     ],
     "server": [],
     "setSourceFile": true,
