@@ -25,7 +25,8 @@ repositories {
 
 dependencies {
     compileOnly "com.cleanroommc:sponge-mixin:0.20.13+mixin.0.8.7"
-    modImplementation "mezz.jei:jei_1.12.2:4.16.1.302"
+    // JEI - 通过 CurseForge 文件 (CurseForge 项目 557549 / 文件 8605435)
+    modImplementation "curse.maven:jei-557549:8605435"
     // AE2 UEL - 通过 CurseMaven 自动下载
     modImplementation "curse.maven:ae2-extended-life-570458:6302098"
     // Modular Machinery CE (CurseForge 817377) - 运行期软依赖（反射加速）；
