@@ -8,6 +8,7 @@ import appeng.tile.inventory.AppEngInternalInventory;
 import appeng.tile.misc.TileInscriber;
 import com.zhenzi233.timebus.item.ITimeBusUpgradeModule;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fml.common.Loader;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -173,8 +174,22 @@ public abstract class MixinTileInscriber {
         // would ADD an item (duplication). The finish sequence still relies
         // on insertItem(sim) running before setStackInSlot; keep this as a
         // regression checkpoint when upgrading AE2.
-        final int take = Math.min(current.getCount(), Math.max(1, amount));
+        // Random Complement (random_complement) also injects TileInscriber:
+        // its @Redirect on setStackInSlot shrinks the same stack object by 1
+        // more whenever the slot count > 1, so without compensation every
+        // finished recipe eats one extra input. When RC is loaded, consume one
+        // less here and let RC's shrink cover that item; with no parallel card
+        // (amount = 1) we consume nothing and RC handles the single item.
+        final int rcExtra = Loader.isModLoaded("random_complement") ? 1 : 0;
+        final int take = Math.min(current.getCount(), Math.max(0, amount - rcExtra));
         current.shrink(take);
+        // RC 的 @Redirect 对单件（槽位 count<=1）不消耗，而是把传入参数原样写回。
+        // 因此 shrink 后剩余 <=1 时必须返回空栈让 RC 写回：槽位恰为 batch 时清空
+        // （正好消耗 amount 件），槽位不足 batch 时全部消耗，不会多吞也不会残留
+        // 1 件原料导致无限生产。
+        if (rcExtra > 0 && !current.isEmpty() && current.getCount() <= 1) {
+            return ItemStack.EMPTY;
+        }
         return current.isEmpty() ? ItemStack.EMPTY : current;
     }
 

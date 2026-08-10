@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.0.12
+
+- Fix: Random Complement compatibility for the inscriber - RC's `setStackInSlot`
+  redirect shrinks the same stack one more time, so the inscriber used to eat
+  one extra input per finished recipe; with a single input left it also stopped
+  consuming and kept producing forever. Consumption is now compensated when RC
+  is loaded (parallel-card batches stay exact, single items are consumed and
+  the machine stops), and behavior is unchanged without RC
+
 ## v1.0.11
 
 - Fix: vanilla Forge 1.12.2 clients can now load the mod - removed the
