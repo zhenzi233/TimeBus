@@ -399,3 +399,21 @@ MM 注入配方时长 modifier 时曾把构造器第一个参数（RequirementTy
 4. **统一层可避免反射与重复推进**：最初实现注入 `ElectricMachine.onAsyncUpdateServer` 的 `processRecipe()` 调用点，需反射调 protected 方法，且只覆盖简单电机器；改到 `RecipeCacheLookupMonitor.updateAndProcess()` 的 `process()` 调用点后，`process()` 是 public 可直接调用，一个注入点覆盖全部配方机器。
 5. **能耗语义**：连拍每 tick 扣 N 倍 `perTickEnergy`、时长 1/N，总耗电守恒；能量不足时 `calculateOperationsThisTick` 会限制推进（安全）。玩家感知与 Mek 官方速度卡（总耗电放大）不同，属预期。
 6. **Mixin 应用失败的日志**：`Mixin apply for mod main failed ... InvalidInjectionException`（WARN 级，required=false 配置下跳过不崩）——排查注入问题先搜这行，比看游戏内效果快。
+
+## 11. 可单测的纯逻辑边界
+
+纯逻辑模块已与 MC 运行时隔离，开启 `gradle.properties` 的 `enable_junit_testing` 后
+可跑 `gradlew.bat test` 单测：
+
+| 已隔离 | 测试文件 | 覆盖 |
+| --- | --- | --- |
+| `TimeBusConfig.parseList` | `TimeBusConfigTest` | 空串/非法数字/单值/超长列表/前后空格回退 |
+| `ActiveSpeedTable<K>`（Mek 活跃表核心） | `ActiveSpeedTableTest` | 同 tick 幂等、10-tick 新鲜窗口过期、speed<=1 拒绝、弱引用回收 |
+
+后续建议（按风险从低到高）：
+
+- `AccelerateHelper.getTileKind` 的判别条件抽成按 Class 判别的纯函数后单测
+- `PartTimeBus.getEffectiveSpeed` / `getCapacityWidth` 的索引与越界回退（`Math.min(cardCount, len-1)`）抽成静态纯函数后单测
+- `MekanismAccelerator` 外层 `WeakHashMap<World, ...>` 的世界卸载回收行为依赖 MC World，需游戏内测试或 mock
+
+注意：测试代码保持 Java 8 语法（编译 target 1.8）。

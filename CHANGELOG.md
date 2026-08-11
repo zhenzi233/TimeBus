@@ -1,5 +1,7 @@
 # Changelog
 
+> 说明：本仓库自 v1.0.4 起维护 CHANGELOG；更早版本（v1.0.0–v1.0.3）为开发期版本，未收录变更记录。
+
 ## v1.0.12
 
 - Change: Mekanism acceleration now works by re-running the machine's recipe

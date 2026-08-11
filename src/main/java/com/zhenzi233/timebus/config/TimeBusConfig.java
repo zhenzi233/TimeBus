@@ -9,11 +9,16 @@ import net.minecraftforge.common.config.ConfigManager;
 import net.minecraftforge.fml.client.event.ConfigChangedEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import com.zhenzi233.timebus.TimeBus;
 
 @Config(modid = TimeBus.MOD_ID)
 @Config.LangKey("config." + TimeBus.MOD_ID + ".title")
 public class TimeBusConfig {
+
+    /** 配置类独立日志，避免静态初始化耦合主类（主类依赖 AE2 API，纯逻辑单测时不加载）。 */
+    private static final Logger LOGGER = LogManager.getLogger("TimeBusConfig");
 
     @Name("Speed Multipliers")
     @Comment({
@@ -285,7 +290,7 @@ public class TimeBusConfig {
     }
 
     /** Parse a comma-separated int list; fall back to {@code defaults} on bad input. */
-    private static int[] parseList(final String raw, final int[] defaults) {
+    static int[] parseList(final String raw, final int[] defaults) {
         if (raw == null || raw.trim().isEmpty()) {
             return defaults;
         }
@@ -300,7 +305,7 @@ public class TimeBusConfig {
             }
             return out;
         } catch (NumberFormatException e) {
-            TimeBus.LOGGER.warn("Time Bus: invalid numeric list in config '{}', using defaults", raw);
+            LOGGER.warn("Time Bus: invalid numeric list in config '{}', using defaults", raw);
             return defaults;
         }
     }

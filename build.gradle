@@ -98,8 +98,11 @@ dependencies {
         implementation "com.cleanroommc:assetmover:${asset_mover_version}"
     }
     if (enable_junit_testing.toBoolean()) {
-        testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
-        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        // 编译目标为 Java 8：JUnit 6 要求 JVM 17+，用 5.10 系（支持 Java 8 运行）。
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
+        // TimeBusConfig 独立 logger（MC 1.12.2 同版本的 log4j），测试类加载需要。
+        testImplementation 'org.apache.logging.log4j:log4j-api:2.8.1'
     }
     // Mixin annotation processor: generates the full mcp->searge refmap
     // (method-level mappings) that released jars need. Without it the refmap

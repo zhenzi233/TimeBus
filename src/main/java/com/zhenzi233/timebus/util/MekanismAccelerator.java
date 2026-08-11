@@ -5,7 +5,6 @@ import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -30,18 +29,8 @@ public final class MekanismAccelerator {
     /** 活跃表记录的新鲜窗口（tick）：TimeBus 每 tick 刷新记录，此为异步任务延迟容限。 */
     private static final long FRESH_WINDOW = 10;
 
-    /** 单台机器的加速状态。 */
-    private static final class AccelState {
-        final int speed;
-        final long tick;
-
-        AccelState(final int speed, final long tick) {
-            this.speed = speed;
-            this.tick = tick;
-        }
-    }
-
-    private static final Map<World, Map<BlockPos, AccelState>> ACTIVE = new WeakHashMap<>();
+    /** 每台被加速的 Mek 机器的活跃状态，按世界分组（world 弱引用，卸载自动清理）。 */
+    private static final Map<World, ActiveSpeedTable<BlockPos>> ACTIVE = new WeakHashMap<>();
 
     private static volatile boolean resolved;
     private static volatile boolean available;
@@ -67,13 +56,9 @@ public final class MekanismAccelerator {
             return false;
         }
         synchronized (ACTIVE) {
-            final Map<BlockPos, AccelState> byPos = ACTIVE.computeIfAbsent(world, w -> new HashMap<>());
-            final AccelState existing = byPos.get(pos);
-            if (existing != null && existing.tick == tick) {
-                return false;
-            }
-            byPos.put(pos, new AccelState(speed, tick));
-            return true;
+            final ActiveSpeedTable<BlockPos> byPos =
+                    ACTIVE.computeIfAbsent(world, w -> new ActiveSpeedTable<>(FRESH_WINDOW));
+            return byPos.register(pos, speed, tick);
         }
     }
 
@@ -83,15 +68,8 @@ public final class MekanismAccelerator {
             return null;
         }
         synchronized (ACTIVE) {
-            final Map<BlockPos, AccelState> byPos = ACTIVE.get(te.getWorld());
-            if (byPos == null) {
-                return null;
-            }
-            final AccelState state = byPos.get(te.getPos());
-            if (state == null || te.getWorld().getTotalWorldTime() - state.tick > FRESH_WINDOW) {
-                return null;
-            }
-            return state.speed > 1 ? state.speed : null;
+            final ActiveSpeedTable<BlockPos> byPos = ACTIVE.get(te.getWorld());
+            return byPos == null ? null : byPos.query(te.getPos(), te.getWorld().getTotalWorldTime());
         }
     }
 
