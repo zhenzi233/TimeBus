@@ -130,7 +130,6 @@ public final class AccelerateHelper {
                     try {
                         // doWork() is private in TileCharger; the mixin invoker
                         // exposes it directly - no reflection dispatch overhead
-                        // (代码审查 3.2).
                         ((com.zhenzi233.timebus.mixin.mod.MixinTileCharger) charger).timebus$doWork();
                         ran++;
                     } catch (Exception e) {
@@ -141,47 +140,21 @@ public final class AccelerateHelper {
                 return ran;
             }
 
-            // AE2 Inscriber: grid-ticked (IGridTickable), not ITickable. Its public
-            // tickingRequest(node, ticksSinceLastCall) advances processingTime by
-            // ticksSinceLastCall each call; the node argument is unused inside, so
-            // passing null is safe. One call = one tick of progress.
-            case INSCRIBER: {
-                try {
-                    // One call = `speed` ticks of progress (ticksSinceLastCall).
-                    ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, Math.max(1, speed));
-                    return 1;
-                } catch (Exception e) {
-                    TimeBus.LOGGER.warn("Time Bus: TileInscriber.tickingRequest failed at {}: {}", target, e.toString());
-                    return 0;
-                }
-            }
-
-            // AE2 Molecular Assembler: grid-ticked (IGridTickable), not ITickable.
-            // tickingRequest(node, ticksSinceLastCall) advances progress by
-            // userPower(ticksSinceLastCall, ...); node is unused inside, so null is
-            // safe. One call = `speed` ticks of progress (only while it is awake,
-            // i.e. actively crafting with network power).
-            case MOLECULAR_ASSEMBLER: {
-                try {
-                    ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, Math.max(1, speed));
-                    return 1;
-                } catch (Exception e) {
-                    TimeBus.LOGGER.warn("Time Bus: TileMolecularAssembler.tickingRequest failed at {}: {}", target, e.toString());
-                    return 0;
-                }
-            }
-
-            // AE2 Vibration Chamber: grid-ticked generator (IGridTickable). Its
-            // tickingRequest burns fuel and injects timePassed*5 AE into the grid;
-            // timePassed scales with ticksSinceLastCall, so one call = `speed`
-            // ticks of burn time (only useful while the grid needs power; when the
-            // grid is full it slows itself down anyway).
+            // AE2 Inscriber / Molecular Assembler / Vibration Chamber: grid-ticked
+            // (IGridTickable), not ITickable. tickingRequest(null, ticksSinceLastCall)
+            // advances progress by ticksSinceLastCall (the node argument is unused
+            // inside, so null is safe); the three classes share exactly this
+            // semantics - inscriber processingTime, assembler userPower (only while
+            // awake with network power), chamber fuel burn + AE injection - so one
+            // call = `speed` ticks of progress.
+            case INSCRIBER:
+            case MOLECULAR_ASSEMBLER:
             case VIBRATION_CHAMBER: {
                 try {
                     ((appeng.api.networking.ticking.IGridTickable) targetTE).tickingRequest(null, Math.max(1, speed));
                     return 1;
                 } catch (Exception e) {
-                    TimeBus.LOGGER.warn("Time Bus: TileVibrationChamber.tickingRequest failed at {}: {}", target, e.toString());
+                    TimeBus.LOGGER.warn("Time Bus: {} tickingRequest failed at {}: {}", kind.name(), target, e.toString());
                     return 0;
                 }
             }
@@ -207,7 +180,7 @@ public final class AccelerateHelper {
             // ITickable update-call path never wastes budget on these machines.
             case MM_CONTROLLER: {
                 if (TimeBusConfig.mmAccelerationEnabled) {
-                    if (sourceKey != null && sourceKey.startsWith("wand:")) {
+                    if (ModularMachineryAccelerator.isWandSource(sourceKey)) {
                         // 兜底：魔杖点击应走 ItemTimeWand.onItemUse 的 semi-permanent
                         // 注入路径；若意外走到这里也绝不注入永久 modifier。
                         return ModularMachineryAccelerator.applyWandToActiveRecipes(targetTE, sourceKey, speed) ? 1 : 0;

@@ -10,6 +10,9 @@
  * recalculateUpgradables（升级变化/存档读取/网络同步）时用 fractionUpgrades
  * 重算；加速期间没有路径触发重算，虚拟卡在稳态下不生效。
  *
+ * <p>注意：MekanismAccelerator.virtualCards 等辅助方法已在 v1.0.12 随旧方案
+ * 一并删除，下方注释代码仅作历史记录，不能直接恢复运行。
+ *
  * <p>恢复方法：把本文件恢复为正常类，并在 timebus.mek.mixin.json 的 mixins
  * 列表里同时注册 MixinMekanismUtils 与 MixinMekanismCacheLoop。
  */

@@ -84,31 +84,14 @@ public class TimeBus {
         proxy.preInit(event);
 
         // Register upgrades for the Time Bus item
-        IItemDefinition timeBusDef = new IItemDefinition() {
-            @Override public String identifier() { return "timebus"; }
-            @Override public java.util.Optional<net.minecraft.item.Item> maybeItem() { return java.util.Optional.of(ItemTimeBus.ITEM); }
-            @Override public java.util.Optional<net.minecraft.item.ItemStack> maybeStack(int stackSize) { return java.util.Optional.of(new net.minecraft.item.ItemStack(ItemTimeBus.ITEM, stackSize)); }
-            @Override public boolean isEnabled() { return true; }
-            @Override public boolean isSameAs(net.minecraft.item.ItemStack comparableStack) {
-                return !comparableStack.isEmpty() && comparableStack.getItem() == ItemTimeBus.ITEM;
-            }
-        };
+        IItemDefinition timeBusDef = makeItemDef("timebus", ItemTimeBus.ITEM);
         Upgrades.SPEED.registerItem(timeBusDef, 4);
         Upgrades.CAPACITY.registerItem(timeBusDef, 3);
         Upgrades.REDSTONE.registerItem(timeBusDef, 1);
         Upgrades.FUZZY.registerItem(timeBusDef, 1);
 
         // Register upgrades for the Time Wand item (Speed Cards only).
-        IItemDefinition wandDef = new IItemDefinition() {
-            @Override public String identifier() { return "time_wand"; }
-            @Override public java.util.Optional<net.minecraft.item.Item> maybeItem() { return java.util.Optional.of(com.zhenzi233.timebus.item.ItemTimeWand.ITEM); }
-            @Override public java.util.Optional<net.minecraft.item.ItemStack> maybeStack(int stackSize) { return java.util.Optional.of(new net.minecraft.item.ItemStack(com.zhenzi233.timebus.item.ItemTimeWand.ITEM, stackSize)); }
-            @Override public boolean isEnabled() { return true; }
-            @Override public boolean isSameAs(net.minecraft.item.ItemStack comparableStack) {
-                return !comparableStack.isEmpty() && comparableStack.getItem() == com.zhenzi233.timebus.item.ItemTimeWand.ITEM;
-            }
-        };
-        Upgrades.SPEED.registerItem(wandDef, 4);
+        Upgrades.SPEED.registerItem(makeItemDef("time_wand", com.zhenzi233.timebus.item.ItemTimeWand.ITEM), 4);
 
         // Register AE2 part models
         AEApi.instance().registries().partModels().registerModels(
@@ -122,6 +105,22 @@ public class TimeBus {
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
         proxy.init(event);
+    }
+
+    /**
+     * AE2 升级卡物品定义，时间总线与时间杖共用。两者仅 identifier 与指向的
+     * Item 不同，统一工厂避免复制粘贴导致 isSameAs/maybe* 语义漂移。
+     */
+    private static IItemDefinition makeItemDef(final String id, final net.minecraft.item.Item item) {
+        return new IItemDefinition() {
+            @Override public String identifier() { return id; }
+            @Override public java.util.Optional<net.minecraft.item.Item> maybeItem() { return java.util.Optional.of(item); }
+            @Override public java.util.Optional<net.minecraft.item.ItemStack> maybeStack(int stackSize) { return java.util.Optional.of(new net.minecraft.item.ItemStack(item, stackSize)); }
+            @Override public boolean isEnabled() { return true; }
+            @Override public boolean isSameAs(net.minecraft.item.ItemStack comparableStack) {
+                return !comparableStack.isEmpty() && comparableStack.getItem() == item;
+            }
+        };
     }
 
     @Mod.EventHandler
@@ -151,7 +150,7 @@ public class TimeBus {
         /**
          * 区块单独卸载时兜底清理：世界还在运行、某个区块被卸载时，如果不清理，
          * 注入的 MM modifier 会随区块存档写入磁盘，重启后机器永久加速。
-         * （见代码审查 4.2；世界整体卸载仍由 onWorldUnload 兜底。）
+         * （区块卸载与整体卸载是两条独立事件路径；世界整体卸载仍由 onWorldUnload 兜底。）
          */
         @SubscribeEvent
         public static void onChunkUnload(final ChunkEvent.Unload event) {

@@ -108,6 +108,12 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     // done once instead of every work tick.
     private String cachedSourceKey = null;
     private BlockPos cachedSourcePos = null;
+    // 升级计数缓存：升级只在 GUI 插拔卡时变化，upgradesChanged() 时失效，
+    // 避免每 tick 的耗电/速度/红石查询反复遍历升级物品槽（getInstalledUpgrades）。
+    private int cachedCardCount = -1;
+    private int cachedCapacityCount = -1;
+    private int cachedRedstoneCount = -1;
+    private int cachedTotalUpgrades = -1;
 
     @Override
     public IItemHandler getInventoryByName(String name) {
@@ -128,7 +134,32 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     private int getCardCount() {
-        return this.getInstalledUpgrades(Upgrades.SPEED);
+        if (cachedCardCount < 0) {
+            cachedCardCount = this.getInstalledUpgrades(Upgrades.SPEED);
+        }
+        return cachedCardCount;
+    }
+
+    private int getCapacityCount() {
+        if (cachedCapacityCount < 0) {
+            cachedCapacityCount = this.getInstalledUpgrades(Upgrades.CAPACITY);
+        }
+        return cachedCapacityCount;
+    }
+
+    private int getRedstoneCount() {
+        if (cachedRedstoneCount < 0) {
+            cachedRedstoneCount = this.getInstalledUpgrades(Upgrades.REDSTONE);
+        }
+        return cachedRedstoneCount;
+    }
+
+    /** 升级插拔后清空升级计数缓存（upgradesChanged 由 AE2 在卡片变化时回调）。 */
+    private void invalidateUpgradeCaches() {
+        cachedCardCount = -1;
+        cachedCapacityCount = -1;
+        cachedRedstoneCount = -1;
+        cachedTotalUpgrades = -1;
     }
 
     /**
@@ -145,7 +176,8 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         }
         final BlockPos pos = getHost().getTile().getPos();
         if (cachedSourceKey == null || !pos.equals(cachedSourcePos)) {
-            cachedSourceKey = "bus:" + pos.getX() + "," + pos.getY() + "," + pos.getZ() + ":" + getSide().name();
+            cachedSourceKey = ModularMachineryAccelerator.SOURCE_BUS_PREFIX
+                    + pos.getX() + "," + pos.getY() + "," + pos.getZ() + ":" + getSide().name();
             cachedSourcePos = pos;
         }
         return cachedSourceKey;
@@ -171,10 +203,13 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     private int getTotalUpgrades() {
-        return this.getInstalledUpgrades(Upgrades.SPEED)
-             + this.getInstalledUpgrades(Upgrades.CAPACITY)
-             + this.getInstalledUpgrades(Upgrades.REDSTONE)
-             + this.getInstalledUpgrades(Upgrades.FUZZY);
+        if (cachedTotalUpgrades < 0) {
+            cachedTotalUpgrades = getCardCount()
+                 + getCapacityCount()
+                 + getRedstoneCount()
+                 + this.getInstalledUpgrades(Upgrades.FUZZY);
+        }
+        return cachedTotalUpgrades;
     }
 
     public double getPowerDraw() {
@@ -196,13 +231,13 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         if (widths.length == 0) {
             return 1;
         }
-        int idx = Math.min(this.getInstalledUpgrades(Upgrades.CAPACITY), widths.length - 1);
+        int idx = Math.min(getCapacityCount(), widths.length - 1);
         return Math.max(1, widths[idx]);
     }
 
     /** True when the redstone upgrade is installed and set to pulse mode. */
     private boolean isPulseMode() {
-        if (this.getInstalledUpgrades(Upgrades.REDSTONE) <= 0) {
+        if (getRedstoneCount() <= 0) {
             return false;
         }
         try {
@@ -234,7 +269,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
     @Override
     protected boolean isSleeping() {
-        if (this.getInstalledUpgrades(Upgrades.REDSTONE) <= 0) {
+        if (getRedstoneCount() <= 0) {
             return false;
         }
         RedstoneMode rsMode;
@@ -294,6 +329,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
     @Override
     public void upgradesChanged() {
+        invalidateUpgradeCaches();
         // Track redstone for pulse mode when upgrades change
         boolean hasSignal = getHost().hasRedstone(getSide());
         if (hasSignal != this.lastRedstone) {

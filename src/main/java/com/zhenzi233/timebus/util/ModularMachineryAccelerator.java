@@ -51,6 +51,19 @@ public final class ModularMachineryAccelerator {
     /** Modifier key prefix for the energy consumption/production scaling. */
     private static final String ENERGY_KEY_PREFIX = "timebus_energy_accel";
 
+    /** 加速来源前缀：Time Bus 部件（"bus:x,y,z:SIDE"）。 */
+    public static final String SOURCE_BUS_PREFIX = "bus:";
+    /** 加速来源前缀：Time Wand（"wand:playerUUID"）。 */
+    public static final String SOURCE_WAND_PREFIX = "wand:";
+
+    /**
+     * 来源标识是否来自时间杖：总线走每 tick 注入路径，魔杖走 semi-permanent
+     * 配方加速路径（配方完成自动恢复）。判定收拢到一处，避免各处裸字符串前缀。
+     */
+    public static boolean isWandSource(final String sourceKey) {
+        return sourceKey != null && sourceKey.startsWith(SOURCE_WAND_PREFIX);
+    }
+
     /**
      * Remembers which source (Time Bus part / wand) injected a duration modifier
      * on which controller, so {@link #restoreAllForSource} can clean up when a
