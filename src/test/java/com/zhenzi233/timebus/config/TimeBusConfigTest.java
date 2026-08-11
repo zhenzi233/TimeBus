@@ -3,6 +3,7 @@ package com.zhenzi233.timebus.config;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TimeBusConfigTest {
 
@@ -34,5 +35,26 @@ class TimeBusConfigTest {
     void parseList_longerListKeepsAllEntries() {
         final int[] extended = {2, 4, 8, 16, 32, 64};
         assertArrayEquals(extended, TimeBusConfig.parseList("2,4,8,16,32,64", DEFAULTS));
+    }
+
+    @Test
+    void valueForCardCount_clampsToLastEntry() {
+        final int[] multipliers = {2, 4, 8, 16, 32};
+        assertEquals(2, TimeBusConfig.valueForCardCount(0, multipliers));
+        assertEquals(32, TimeBusConfig.valueForCardCount(4, multipliers));
+        assertEquals(32, TimeBusConfig.valueForCardCount(9, multipliers), "超长卡数回退到最后一项");
+        assertEquals(2, TimeBusConfig.valueForCardCount(-1, multipliers), "负卡数取第一项");
+    }
+
+    @Test
+    void valueForCardCount_emptyOrNullListReturnsOne() {
+        assertEquals(1, TimeBusConfig.valueForCardCount(0, new int[0]));
+        assertEquals(1, TimeBusConfig.valueForCardCount(4, null));
+    }
+
+    @Test
+    void valueForCardCount_singleEntry() {
+        assertEquals(2, TimeBusConfig.valueForCardCount(0, new int[]{2}));
+        assertEquals(2, TimeBusConfig.valueForCardCount(3, new int[]{2}));
     }
 }

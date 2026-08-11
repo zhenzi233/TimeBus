@@ -146,6 +146,10 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | --- | --- | --- |
 | `Mek Acceleration Enabled` | `false` | Re-run Mek machines' recipe tick multiple times per server tick: N extra ticks of progress per tick (N = bus speed multiplier, per-tick energy xN, total energy per recipe unchanged; covers all recipe-cache-driven machines incl. factories/chemical machines/PRC, excluding generators and instant-conversion machines) |
 
+> Known deviation: the Antiprotonic Nucleosynthesizer's recipe monitor advances
+> one extra tick itself, so it accelerates at N+1 with slightly higher per-tick
+> energy; accepted behavior.
+
 ## Usage
 
 1. Place the Time Bus on any side of an AE2 cable/bus network.

@@ -194,12 +194,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public int getEffectiveSpeed() {
-        int[] multipliers = TimeBusConfig.getSpeedMultipliers();
-        if (multipliers.length == 0) {
-            return 1;
-        }
-        int idx = Math.min(getCardCount(), multipliers.length - 1);
-        return Math.max(1, multipliers[idx]);
+        return TimeBusConfig.valueForCardCount(getCardCount(), TimeBusConfig.getSpeedMultipliers());
     }
 
     private int getTotalUpgrades() {
@@ -227,12 +222,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public int getCapacityWidth() {
-        int[] widths = TimeBusConfig.getCapacityWidths();
-        if (widths.length == 0) {
-            return 1;
-        }
-        int idx = Math.min(getCapacityCount(), widths.length - 1);
-        return Math.max(1, widths[idx]);
+        return TimeBusConfig.valueForCardCount(getCapacityCount(), TimeBusConfig.getCapacityWidths());
     }
 
     /** True when the redstone upgrade is installed and set to pulse mode. */

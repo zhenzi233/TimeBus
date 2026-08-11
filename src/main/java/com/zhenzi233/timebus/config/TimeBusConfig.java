@@ -289,6 +289,17 @@ public class TimeBusConfig {
         return cachedWandSpeedMultipliers;
     }
 
+    /**
+     * 按升级卡数取配置数组（速度倍率/容量宽度）对应值：卡数越界回退到最后一项，
+     * 空表返回 1。纯函数，可脱离 MC 运行时单测。
+     */
+    public static int valueForCardCount(final int cardCount, final int[] values) {
+        if (values == null || values.length == 0) {
+            return 1;
+        }
+        return Math.max(1, values[Math.max(0, Math.min(cardCount, values.length - 1))]);
+    }
+
     /** Parse a comma-separated int list; fall back to {@code defaults} on bad input. */
     static int[] parseList(final String raw, final int[] defaults) {
         if (raw == null || raw.trim().isEmpty()) {

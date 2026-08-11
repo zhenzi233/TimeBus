@@ -125,6 +125,9 @@ src/main/java/com/zhenzi233/timebus/
 
 配置界面已本地化（`config.timebus.*` lang keys，中英双语）。
 
+> 已知局限：Forge 1.12.2 的 `@Config.Comment` 是英文硬编码，不走 lang key，
+> 玩家直接看 cfg 文件时注释是英文（中文玩家以 README 配置表为对照即可）。
+
 ### 5.1 配置类型迁移的坑（v1.0.6 教训，踩过一遍）
 
 1. **不要把 String 配置直接改成 int[]**：Forge 1.12.2 `@Config` 虽然支持数组字段，但已存在的旧 cfg 里条目是 `S:"Speed Multipliers"=2,4,8,16,32` 字符串格式；改成数组字段后 Forge 无法从旧字符串条目迁移，字段被读成 null/空数组 → 倍率/宽度**静默退化为 1**（症状：GUI 加速倍率显示 1x，无任何报错）。正确姿势：**保持 String 字段 + 解析一次缓存**（`getSpeedMultipliers()` / `getCapacityWidths()` / `getWandSpeedMultipliers()`），在 `onConfigChanged` 里失效缓存——既兼容旧 cfg，又没有每 tick split+parse 开销

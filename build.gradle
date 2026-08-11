@@ -126,7 +126,10 @@ compileJava {
 apply from: 'gradle/scripts/dependencies.gradle'
 apply from: 'gradle/scripts/publish-platforms.gradle'
 
-// CurseForge 发布任务：插件类只在主脚本编译期可见，因此不放入上面的脚本
+// CurseForge 发布任务：插件类只在主脚本编译期可见，因此不放入上面的脚本。
+// 注意：线上发布实际走 gradle/scripts/publish-curseforge.js（Puppeteer 过
+// Cloudflare 人机验证），见 DEVELOPER.md §9.3；此 task 保留仅供无挑战环境
+// 参考，勿用于线上发布。
 task publishCurseForge(type: net.darkhax.curseforgegradle.TaskPublishCurseForge) {
     group = 'publishing'
     description = '上传发布到 CurseForge'
@@ -273,6 +276,14 @@ test {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc).configureEach {
+    // 注释以"为什么"为主、非全量 API 文档：关闭 doclint 严格校验，避免
+    // 缺失 @param 等小问题导致 javadoc 构建失败（Java 25 默认开启）。
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.encoding = 'UTF-8'
+    options.charSet = 'UTF-8'
 }
 
 apply from: 'gradle/scripts/publishing.gradle'
