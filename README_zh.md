@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/zhenzi233/TimeBus/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/github/v/tag/zhenzi233/TimeBus)](https://github.com/zhenzi233/TimeBus/releases)
 
 **Applied Energistics 2** 附属模组，适用于 Minecraft 1.12.2（CleanroomLoader）。核心主题是**时间操控**：加速方块与 AE2 机器、生产并存储特殊的**时间流体**，以及用**时间杖**随时加速方块、对 ME 总线进行批量传输。
 
@@ -90,9 +90,11 @@ gradlew.bat build
 
 产物输出到 `build/libs/`：
 
-- `timebus-1.0.0.jar` — 发布版（已重映射）
-- `timebus-1.0.0-dev.jar` — 开发版
-- `timebus-1.0.0-sources.jar` — 源码
+- `timebus-<version>.jar` — 发布版（已重映射）
+- `timebus-<version>-dev.jar` — 开发版
+- `timebus-<version>-sources.jar` — 源码
+
+（`<version>` 对应 `gradle.properties` 中的 `mod_version`，以实际发布版本为准。）
 
 预编译 jar 已发布在 [Releases](https://github.com/zhenzi233/TimeBus/releases) 页面。
 

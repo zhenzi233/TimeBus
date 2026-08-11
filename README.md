@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文](README_zh.md)
 
-[![Release](https://img.shields.io/badge/release-v1.0.4-blue)](https://github.com/zhenzi233/TimeBus/releases/tag/v1.0.4)
+[![Release](https://img.shields.io/github/v/tag/zhenzi233/TimeBus)](https://github.com/zhenzi233/TimeBus/releases)
 
 An **Applied Energistics 2** addon for Minecraft 1.12.2 (CleanroomLoader) centered on **time manipulation**: accelerate blocks and AE2 machines, produce and store a special **Time Fluid**, and wield the **Time Wand** for on-demand acceleration and bus batch transfers.
 
@@ -85,9 +85,11 @@ gradlew.bat build
 ```
 
 Output jars land in `build/libs/`:
-- `timebus-1.0.4.jar` — release jar (remapped)
-- `timebus-1.0.4-dev.jar` — development jar
-- `timebus-1.0.4-sources.jar` — sources
+- `timebus-<version>.jar` — release jar (remapped)
+- `timebus-<version>-dev.jar` — development jar
+- `timebus-<version>-sources.jar` — sources
+
+(`<version>` follows `mod_version` in `gradle.properties`; released jars use the actual published version.)
 
 Prebuilt jars are published on the [Releases](https://github.com/zhenzi233/TimeBus/releases) page.
 

@@ -5,8 +5,8 @@
 	"mcversion": "1.12.2",
 	"description": "A time acceleration block that speeds up blocks on its facing side.",
 	"authorList": ["zhenzi233"],
-	"credits": "",
-	"url": "",
-	"updateJSON": "",
+	"credits": "${mod_credits}",
+	"url": "${mod_url}",
+	"updateJSON": "${mod_update_json}",
 	"logoFile": ""
 }]

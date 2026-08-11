@@ -1,0 +1,18 @@
+{
+  "homepage": "https://github.com/zhenzi233/TimeBus",
+  "1.12.2": {
+    "1.0.12": "- Mek: recipe-tick burst acceleration at the shared RecipeCacheLookupMonitor layer, covering every recipe-driven machine; accelerated per-tick energy draw is reported via Mek's sync channel\n- Fix: redstone / power loss now stops MM acceleration immediately and restores injected modifiers\n- Fix: Random Complement compatibility for the inscriber (no extra input eaten, no infinite production)",
+    "1.0.11": "- Fix: vanilla Forge 1.12.2 clients can now load the mod (Java 8 class target, no Cleanroom-only ModType attribute)",
+    "1.0.10": "- Fix: mod version now sourced from gradle.properties\n- Mek: virtual speed cards use the real max installed count (configurable) and round up",
+    "1.0.9": "- Fix: multiple Time Buses no longer overwrite / clear each other's MM acceleration\n- Fix: Time Wand no longer leaves MM controllers permanently accelerated; injected modifiers are cleaned up on chunk unload\n- Perf: MM acceleration skips the per-tick reflection sweep in steady state",
+    "1.0.8": "- MM: energy cost now follows the speed-up (new option, total energy per recipe stays constant)\n- MM: force refresh of pooled recipe contexts every 20 ticks so threads never stay unaccelerated",
+    "1.0.7": "- Time Fluid Generator: consumes up to 64 inputs per update so Time Bus acceleration speeds it up\n- MM: duration modifier targets REQUIREMENT_DURATION (fixes no-op acceleration and a client crash)\n- MM: new Keep Idle Threads option for factory controllers",
+    "1.0.6": "- MM: acceleration now stacks per source and supports factory controllers\n- Fix: pulse mode completes the whole batch; fluid billing matches what was drained\n- Perf: config strings parsed once and cached; unloaded chunks skipped cheaply",
+    "1.0.5": "- MM: acceleration via recipe-duration modifiers (opt-in)\n- Time Wand: cell size configurable; emptying into the Time Fluid Generator no longer destroys fluid\n- Dev: CraftTweaker FMLAT entries merged",
+    "1.0.4": "- Fix: inscriber mixin hardening (no item duplication / loss)\n- Random-tick acceleration now calls Block.randomTick (grass spread, ice melt, etc.)\n- Time Wand: server-side resource precheck, batch transfer only charges when items actually move"
+  },
+  "promos": {
+    "1.12.2-latest": "1.0.12",
+    "1.12.2-recommended": "1.0.12"
+  }
+}
