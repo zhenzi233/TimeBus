@@ -14,8 +14,9 @@ import java.util.WeakHashMap;
  *
  * <p>Mek 机器继承 {@code TileEntityRestrictedTick}，其 final {@code update()}
  * 带世界 tick 去重，TimeBus 的 ITickable 连拍无效。改用 Mixin @Redirect
- * {@code TileEntityElectricMachine.onAsyncUpdateServer} 里的 processRecipe()
- * 调用点，循环调用 N 次推进配方进度（见 MixinMekanismProcessRecipe）。
+ * {@code RecipeCacheLookupMonitor.updateAndProcess} 里的
+ * {@code CachedRecipe.process()} 调用点，循环调用 N 次推进配方进度
+ * （见 MixinMekanismCacheLoop，覆盖所有走 CachedRecipe 的配方机器）。
  *
  * <p>本类维护"当前被 TimeBus 加速的 Mek 机器"活跃表：TimeBus 每 tick 扫描时
  * 登记 (world, pos, speed)，Mixin 查询时校验新鲜度（超过窗口自动失效），

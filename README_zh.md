@@ -147,7 +147,7 @@ gradlew.bat build
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
-| `Mek Acceleration Enabled` | `false` | 是否连拍加速 Mek 机器：每 tick 额外推进 N 刻配方进度（N=总线速度倍率，每 tick 能耗同倍放大、单次配方总耗电守恒；当前覆盖普通电机器） |
+| `Mek Acceleration Enabled` | `false` | 是否连拍加速 Mek 机器：每 tick 额外推进 N 刻配方进度（N=总线速度倍率，每 tick 能耗同倍放大、单次配方总耗电守恒；覆盖所有基于配方缓存推进的加工机器，含工厂/化学机器/PRC 等，发电机与即时转换类机器除外） |
 
 ## 使用方式
 

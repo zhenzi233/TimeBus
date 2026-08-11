@@ -1,5 +1,5 @@
 /*
- * 虚拟速度卡方案（已暂停，改用 MixinMekanismProcessRecipe 连拍加速）。
+ * 虚拟速度卡方案（已暂停，改用 MixinMekanismCacheLoop 连拍加速）。
  *
  * <p>原理：Mek 的配方时长与能耗按 MekanismUtils.fractionUpgrades(tile, SPEED)
  * 计算（ticks = base * M^(-fraction)）。本 Mixin 在 fractionUpgrades 内拦截
@@ -11,7 +11,7 @@
  * 重算；加速期间没有路径触发重算，虚拟卡在稳态下不生效。
  *
  * <p>恢复方法：把本文件恢复为正常类，并在 timebus.mek.mixin.json 的 mixins
- * 列表里同时注册 MixinMekanismUtils 与 MixinMekanismProcessRecipe。
+ * 列表里同时注册 MixinMekanismUtils 与 MixinMekanismCacheLoop。
  */
 //package com.zhenzi233.timebus.mixin.mek;
 //

@@ -224,8 +224,8 @@ public final class AccelerateHelper {
 
             // Mekanism: final update() with world-tick deduplication makes update()
             // spam useless; register the machine as accelerated so the Mixin on
-            // TileEntityElectricMachine.onAsyncUpdateServer repeats processRecipe()
-            // `speed` times per tick (one tick of progress per extra run).
+            // RecipeCacheLookupMonitor repeats CachedRecipe.process() `speed`
+            // times per tick (one tick of progress per extra run).
             case MEK_MACHINE: {
                 if (TimeBusConfig.mekAccelerationEnabled) {
                     if (MekanismAccelerator.registerOnce(world, target, speed, world.getTotalWorldTime())) {

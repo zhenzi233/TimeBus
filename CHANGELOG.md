@@ -7,8 +7,13 @@
   cards - Mek CE caches `ticksRequired` and only recomputes it on upgrade
   recalculation, so virtual speed cards had no effect while a machine was
   running. The new approach advances N ticks of progress per tick (per-tick
-  energy xN, total energy per recipe unchanged) and currently covers ordinary
-  ElectricMachine-based machines
+  energy xN, total energy per recipe unchanged) and is injected at the shared
+  RecipeCacheLookupMonitor layer, covering every recipe-driven machine
+  (ElectricMachine family, chance/double/advanced machines, chemical
+  machines, PRC, metallurgic infuser, factories per slot, rotary
+  condensentrator, solar neutron activator, ambient accumulator, thermal
+  evaporation controller; generators and instant-conversion machines are
+  excluded)
 - Change: Mek machine GUIs now report the accelerated per-tick energy draw
   (base energyPerTick x speed) via Mek's own sync channel - display only, the
   actual power drain is untouched

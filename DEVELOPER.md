@@ -383,16 +383,19 @@ MM 注入配方时长 modifier 时曾把构造器第一个参数（RequirementTy
 
 - 反加速闸门：`TileEntityRestrictedTick.update()` final + 世界 tick 去重，ITickable 连拍无效；不走 doRestrictedTick 反射（异步任务堆积 + 能量不一致风险），改为在配方推进调用点上循环调用。
 - **虚拟速度卡方案（已废弃，v1.0.12 起改用连拍）**：旧实现 Mixin @Redirect `MekanismUtils.fractionUpgrades` 内的 `getInstalledUpgrades(SPEED)` 调用，给 SPEED 卡数加虚拟值让机器按官方公式自行加速（时长 ÷M^Δ、每 tick 能耗 ×M^(2Δ)、总耗电 ×M^Δ）。**失效根因**：Mek CE 的配方时长实际由缓存字段 `ticksRequired` 决定（`CachedRecipe.setRequiredTicks(() -> ticksRequired)`），只在 `recalculateUpgradables`（升级变化/存档读取/网络同步）时用 `fractionUpgrades` 重算；加速期间没有任何路径触发重算，虚拟卡在稳态下不生效（仅 GUI 显示与重算瞬间生效）。
-- 原理（连拍）：`CachedRecipe.process()` 每次调用固定 `operatingTicks++`，且输入只在配方完成时扣除——同一 tick 内连续调用 N 次即可推进 N 刻。实现：Mixin @Redirect `TileEntityElectricMachine.onAsyncUpdateServer` 里的 `processRecipe()` 调用点，循环调用 N 次（N = 活跃表登记的 speed），每次 process 推进 1 刻。能耗随推进次数同倍放大（每 tick N × perTickEnergy）、单次配方总耗电守恒（与 MM 守恒方案一致，不同于 Mek 官方速度卡的 M^Δ 放大）。
+- 原理（连拍）：`CachedRecipe.process()` 每次调用固定 `operatingTicks++`，且输入只在配方完成时扣除——同一 tick 内连续调用 N 次即可推进 N 刻。实现：Mixin @Redirect `RecipeCacheLookupMonitor.updateAndProcess()Z` 里的 `CachedRecipe.process()` 调用点（见 `MixinMekanismCacheLoop`），循环调用 N 次（N = 活跃表登记的 speed），每次 process 推进 1 刻。能耗随推进次数同倍放大（每 tick N × perTickEnergy）、单次配方总耗电守恒（与 MM 守恒方案一致，不同于 Mek 官方速度卡的 M^Δ 放大）。`@Shadow` 取 monitor 的 `handler` 字段（即机器 tile）查活跃表。
 - 活跃表：TimeBus 每 tick 扫描时把 (world, pos, speed) 登记进 `MekanismAccelerator` 活跃表（WeakHashMap + synchronized，兼容 Mek 异步任务线程），Mixin 查询校验 10 tick 新鲜度，总线移走自动失效。
 - 配置：`Mek Acceleration Enabled`（默认 false）；开关关闭时活跃表不登记，Mixin 退化为单次调用。
-- 覆盖范围：当前只覆盖普通电机器（`TileEntityElectricMachine` 子类中未覆盖 `onAsyncUpdateServer` 的机器）；工厂/化学机器等有各自的 `onAsyncUpdateServer`/配方实现，需要按类别扩展。
+- 覆盖范围（为什么选统一层）：所有"配方推进"机器最终都走 `RecipeCacheLookupMonitor.updateAndProcess()`，一个注入点覆盖全部，且避免逐类扩展时多级 `onAsyncUpdateServer` super 链导致重复推进（如 AdvancedElectricMachine 若在 ElectricMachine 层注入会 N+2 次）：
+  - **A 类（已覆盖，走 CachedRecipe 配方推进）**：普通电机器（富集机/冶炼炉/粉碎机/冲压机等 ElectricMachine 子类）、机会机系（ChanceMachine：电池提取/分离、精密锯木、回收）、双输入机系（DoubleElectricMachine：合金机、组合机）、高级机系（AdvancedElectricMachine：化学注入室、锇压缩机、净化室）、化学系列（氧化机/溶解室/清洗机/灌注机/同位素离心机/营养液化机）、PRC、冶金灌注机、**工厂**（每个工艺槽一个 FactoryRecipeCacheLookupMonitor）、特殊配方机（旋转冷凝机、太阳能中子活化机、环境蓄能器/Energy、热蒸发控制器）。
+  - **B 类（不适用连拍，未支持）**：配方装配机（FormulaicAssemblicator）、矿物识别机（Oredictionificator，即时转换无进度）、地震探测机（SeismicVibrator）、数字采矿机（DigitalMiner）、发电机（太阳能/风能/热力/气体等，产电而非加工配方）——各自推进循环独立，"加速"语义不同，如需支持要按类别单独设计。
+  - **已知特例**：反质子核合成机的 monitor 覆盖了带参 `updateAndProcess` 并自己直接调一次 `process()`，实际推进 N+1 次（误差可接受）。
 
 ### 10.7.1 连拍 Mixin 的坑（v1.0.12 实录，踩过一遍）
 
-1. **@Redirect 的 target 类名必须是字节码符号引用的类，不是方法声明类**：`TileEntityElectricMachine.onAsyncUpdateServer` 里 `this.processRecipe()` 编译后符号引用是 `TileEntityElectricMachine.processRecipe()`（javac 按调用处静态类型生成），即使方法实际声明在父类 `TileEntityBasicMachine`——target 写父类会匹配不到调用点，注入**静默失效**（无报错、无效果）。用 `javap -v` 查常量池 `Methodref` 确认。
+1. **@Redirect 的 target 类名必须是字节码符号引用的类，不是方法声明类**：如 `RecipeCacheLookupMonitor.updateAndProcess` 里 `cachedRecipe.process()` 的符号引用是 `CachedRecipe.process()`（字段静态类型），`onAsyncUpdateServer` 里 `this.processRecipe()` 则指向调用处静态类型——target 写错类会匹配不到调用点，注入**静默失效**（无报错、无效果）。用 `javap -v` 查常量池 `Methodref` 确认。
 2. **@Redirect handler 必须把调用目标实例作为第一个参数**（即使原方法无参）：无参 handler 报 `InvalidInjectionException: Not enough arguments: expected argument type ... at index 0`。
-3. **handler 参数类型必须与目标精确匹配，父类需要 @Coerce**：Mixin 0.8.7 运行时用 `Type.equals` 校验 handler 参数，`TileEntity` 会被拒（`Found unexpected type ...`）；加 `@Coerce` 注解后走可赋值检查（`canCoerce`），子类实例可传入父类参数。这样避免 import 精确 Mek 类型——`TileEntityElectricMachine` 继承链依赖 IC2 API（`IEnergyReceiver`），不在编译 classpath 上，import 会编译失败（`无法访问 IEnergyReceiver`）。
-4. **调 protected processRecipe 用反射**（`TileEntityBasicMachine.class.getDeclaredMethod("processRecipe")` + setAccessible，字符串类名避免 import）：每 tick N 次 invoke 开销可接受（先跑通再考虑 @Invoker）。
+3. **handler 参数类型必须与目标精确匹配，父类需要 @Coerce**：Mixin 0.8.7 运行时用 `Type.equals` 校验 handler 参数，父类型会被拒（`Found unexpected type ...`）；加 `@Coerce` 注解后走可赋值检查（`canCoerce`）。当需要避免 import 精确 Mek 类型时（如 `TileEntityElectricMachine` 继承链依赖 IC2 API `IEnergyReceiver`，不在编译 classpath 上，import 会编译失败 `无法访问 IEnergyReceiver`），用 MC 基类 `TileEntity` + `@Coerce` 绕过。
+4. **统一层可避免反射与重复推进**：最初实现注入 `ElectricMachine.onAsyncUpdateServer` 的 `processRecipe()` 调用点，需反射调 protected 方法，且只覆盖简单电机器；改到 `RecipeCacheLookupMonitor.updateAndProcess()` 的 `process()` 调用点后，`process()` 是 public 可直接调用，一个注入点覆盖全部配方机器。
 5. **能耗语义**：连拍每 tick 扣 N 倍 `perTickEnergy`、时长 1/N，总耗电守恒；能量不足时 `calculateOperationsThisTick` 会限制推进（安全）。玩家感知与 Mek 官方速度卡（总耗电放大）不同，属预期。
 6. **Mixin 应用失败的日志**：`Mixin apply for mod main failed ... InvalidInjectionException`（WARN 级，required=false 配置下跳过不崩）——排查注入问题先搜这行，比看游戏内效果快。

@@ -142,7 +142,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `Mek Acceleration Enabled` | `false` | Re-run Mek machines' recipe tick multiple times per server tick: N extra ticks of progress per tick (N = bus speed multiplier, per-tick energy xN, total energy per recipe unchanged; currently covers ordinary ElectricMachine machines) |
+| `Mek Acceleration Enabled` | `false` | Re-run Mek machines' recipe tick multiple times per server tick: N extra ticks of progress per tick (N = bus speed multiplier, per-tick energy xN, total energy per recipe unchanged; covers all recipe-cache-driven machines incl. factories/chemical machines/PRC, excluding generators and instant-conversion machines) |
 
 ## Usage
 
