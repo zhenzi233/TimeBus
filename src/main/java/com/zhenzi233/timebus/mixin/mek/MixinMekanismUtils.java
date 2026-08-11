@@ -51,7 +51,7 @@
 //    // 否则 Mixin 抛 InvalidInjectionException 导致整个注入失败。
 //    private static int timebus$addVirtualSpeedCards(final IUpgradeTile tile, final Upgrade upgrade) {
 //        final int base = tile.getInstalledUpgrades(upgrade);
-//        if (upgrade == Upgrade.SPEED && TimeBusConfig.mekAccelerationEnabled) {
+//        if (upgrade == Upgrade.SPEED && TimeBusConfig.Mek.mekAccelerationEnabled) {
 //            final Integer speed = MekanismAccelerator.queryActive((TileEntity) tile);
 //            if (speed != null && speed > 1) {
 //                return base + MekanismAccelerator.virtualCards(speed);

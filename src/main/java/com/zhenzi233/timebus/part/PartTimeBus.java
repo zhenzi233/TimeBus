@@ -69,7 +69,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         super(is);
         this.getConfigManager().registerSetting(Settings.REDSTONE_CONTROLLED, RedstoneMode.IGNORE);
         this.getConfigManager().registerSetting(Settings.FUZZY_MODE, FuzzyMode.IGNORE_ALL);
-        this.getProxy().setIdlePowerUsage(TimeBusConfig.idlePower);
+        this.getProxy().setIdlePowerUsage(TimeBusConfig.Bus.idlePower);
     }
 
     private final ItemStackHandler configInventory = new ItemStackHandler(9);
@@ -194,7 +194,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public int getEffectiveSpeed() {
-        return TimeBusConfig.valueForCardCount(getCardCount(), TimeBusConfig.getSpeedMultipliers());
+        return TimeBusConfig.valueForCardCount(getCardCount(), TimeBusConfig.Bus.getSpeedMultipliers());
     }
 
     private int getTotalUpgrades() {
@@ -208,21 +208,21 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     public double getPowerDraw() {
-        return Math.max(TimeBusConfig.idlePower, (getEffectiveSpeed() + 2 * getTotalUpgrades()) * TimeBusConfig.powerPerSpeed);
+        return Math.max(TimeBusConfig.Bus.idlePower, (getEffectiveSpeed() + 2 * getTotalUpgrades()) * TimeBusConfig.Bus.powerPerSpeed);
     }
 
     // Fluid mode - query methods for GUI
     public String getFluidDisplayName() {
-        Fluid f = FluidRegistry.getFluid(TimeBusConfig.fluidName);
-        return f != null ? f.getLocalizedName(new FluidStack(f, 1)) : TimeBusConfig.fluidName;
+        Fluid f = FluidRegistry.getFluid(TimeBusConfig.Bus.fluidName);
+        return f != null ? f.getLocalizedName(new FluidStack(f, 1)) : TimeBusConfig.Bus.fluidName;
     }
 
     public double getFluidRate() {
-        return TimeBusConfig.fluidPerTick * Math.pow(TimeBusConfig.fluidConsumeMultiplier, getCardCount());
+        return TimeBusConfig.Bus.fluidPerTick * Math.pow(TimeBusConfig.Bus.fluidConsumeMultiplier, getCardCount());
     }
 
     public int getCapacityWidth() {
-        return TimeBusConfig.valueForCardCount(getCapacityCount(), TimeBusConfig.getCapacityWidths());
+        return TimeBusConfig.valueForCardCount(getCapacityCount(), TimeBusConfig.Bus.getCapacityWidths());
     }
 
     /** True when the redstone upgrade is installed and set to pulse mode. */
@@ -379,12 +379,12 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     }
 
     private void doWork() {
-        if (TimeBusConfig.fluidMode && !consumeFluid()) {
+        if (TimeBusConfig.Bus.fluidMode && !consumeFluid()) {
             return; // Not enough fluid to operate
         }
         int speed = getEffectiveSpeed();
         int width = getCapacityWidth();
-        int budget = Math.max(1, TimeBusConfig.maxCallsPerTick);
+        int budget = Math.max(1, TimeBusConfig.Bus.maxCallsPerTick);
         int used = 0;
 
         if (!workActive) {
@@ -495,7 +495,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         // Move on to random ticks if this block uses them and we have not done so yet.
         if (workPhase != PHASE_RANDOM && targetBlock.getTickRandomly()) {
             workPhase = PHASE_RANDOM;
-            workPhaseRemaining = Math.max(1, speed * TimeBusConfig.randomTickCallsPerSpeed);
+            workPhaseRemaining = Math.max(1, speed * TimeBusConfig.Bus.randomTickCallsPerSpeed);
             return;
         }
         workBlockIndex++;
@@ -515,14 +515,14 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     private boolean consumeFluid() {
         try {
             // Accumulate fractional mB, extract only when >= 1 mB
-            fluidAccumulator += TimeBusConfig.fluidPerTick * Math.pow(TimeBusConfig.fluidConsumeMultiplier, getCardCount());
+            fluidAccumulator += TimeBusConfig.Bus.fluidPerTick * Math.pow(TimeBusConfig.Bus.fluidConsumeMultiplier, getCardCount());
             if (fluidAccumulator < 1.0) return true;
             int toDrain = (int) fluidAccumulator;
             fluidAccumulator -= toDrain;
 
             IStorageGrid storage = this.getProxy().getStorage();
-            if (cachedFluid == null || !TimeBusConfig.fluidName.equals(cachedFluidName)) {
-                cachedFluidName = TimeBusConfig.fluidName;
+            if (cachedFluid == null || !TimeBusConfig.Bus.fluidName.equals(cachedFluidName)) {
+                cachedFluidName = TimeBusConfig.Bus.fluidName;
                 cachedFluid = FluidRegistry.getFluid(cachedFluidName);
                 cachedFluidChannel = AEApi.instance().storage()
                         .getStorageChannel(IFluidStorageChannel.class);
@@ -536,9 +536,9 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
             // Check minimum threshold
             IAEFluidStack minCheck = AEFluidStack.fromFluidStack(
-                    new FluidStack(fluid, TimeBusConfig.minFluid));
+                    new FluidStack(fluid, TimeBusConfig.Bus.minFluid));
             IAEFluidStack simulated = fluidInv.extractItems(minCheck, Actionable.SIMULATE, machineSource);
-            if (simulated == null || simulated.getStackSize() < TimeBusConfig.minFluid) return false;
+            if (simulated == null || simulated.getStackSize() < TimeBusConfig.Bus.minFluid) return false;
 
             // Consume accumulated amount
             IAEFluidStack toConsume = AEFluidStack.fromFluidStack(
@@ -563,11 +563,11 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
 
     private void extractAEPower(int ticksSinceLastCall) {
-        if (TimeBusConfig.fluidMode) return;
+        if (TimeBusConfig.Bus.fluidMode) return;
         try {
             IEnergyGrid grid = this.getProxy().getEnergy();
             double total = getPowerDraw();
-            double active = total - TimeBusConfig.idlePower;
+            double active = total - TimeBusConfig.Bus.idlePower;
             if (active > 0) {
                 grid.extractAEPower(active * ticksSinceLastCall, Actionable.MODULATE, PowerMultiplier.CONFIG);
             }
@@ -605,8 +605,8 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 target.getZ() + 0.5 + dz,
                 dir.getXOffset() * 0.03, 0, dir.getZOffset() * 0.03);
         }
-        if (TimeBusConfig.fluidMode && rand.nextInt(2) == 0) {
-            boolean isTimeFluid = "time_fluid".equals(TimeBusConfig.fluidName);
+        if (TimeBusConfig.Bus.fluidMode && rand.nextInt(2) == 0) {
+            boolean isTimeFluid = "time_fluid".equals(TimeBusConfig.Bus.fluidName);
             if (isTimeFluid) {
                 world.spawnParticle(EnumParticleTypes.PORTAL,
                     start.getX() + 0.5 + dx,

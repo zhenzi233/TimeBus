@@ -28,7 +28,7 @@ public abstract class MixinFactoryThreadRecycle {
     // 让注解处理器跳过混淆映射查找，否则它会因找不到映射而报错。
     @Inject(method = "cleanIdleTimeoutThread", at = @At("HEAD"), cancellable = true, remap = false)
     private void timebus$keepThreadsWhileAccelerated(final CallbackInfo ci) {
-        if (TimeBusConfig.mmKeepThreadsEnabled
+        if (TimeBusConfig.MM.mmKeepThreadsEnabled
                 && ModularMachineryAccelerator.isAccelerated((TileEntity) (Object) this)) {
             ci.cancel();
         }

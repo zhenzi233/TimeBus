@@ -96,7 +96,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
     /** Effective speed from the wand's own configuration (independent of the Time Bus). */
     private int getWandSpeed(final ItemStack stack) {
-        final int[] multipliers = TimeBusConfig.getWandSpeedMultipliers();
+        final int[] multipliers = TimeBusConfig.Wand.getWandSpeedMultipliers();
         if (multipliers.length == 0) {
             return 1;
         }
@@ -110,7 +110,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
      * 用户按"时间总线倍率"的直觉配置，魔杖自己那套可能起步更高。
      */
     private int getWandMmSpeed(final ItemStack stack) {
-        final int[] multipliers = TimeBusConfig.getSpeedMultipliers();
+        final int[] multipliers = TimeBusConfig.Bus.getSpeedMultipliers();
         if (multipliers.length == 0) {
             return 1;
         }
@@ -170,7 +170,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         // or failure - nothing is written permanently into the save. An idle
         // machine is not charged.
         final TileEntity targetTE = worldIn.getTileEntity(pos);
-        if (TimeBusConfig.mmAccelerationEnabled && targetTE != null
+        if (TimeBusConfig.MM.mmAccelerationEnabled && targetTE != null
                 && ModularMachineryAccelerator.isController(targetTE)) {
             if (!ModularMachineryAccelerator.hasActiveRecipes(targetTE)) {
                 sendNoActiveRecipe(player);
@@ -209,7 +209,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         if (TimeBusFluids.TIME_FLUID == null) {
             return false;
         }
-        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        final double energyNeed = TimeBusConfig.Wand.wandEnergyCost;
         if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
             return false;
         }
@@ -220,7 +220,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         if (cell == null) {
             return false;
         }
-        final int fluidNeed = TimeBusConfig.wandFluidCost;
+        final int fluidNeed = TimeBusConfig.Wand.wandFluidCost;
         final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
         final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
         return taken != null && taken.getStackSize() >= fluidNeed;
@@ -265,7 +265,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         if (TimeBusFluids.TIME_FLUID == null) {
             return false;
         }
-        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        final double energyNeed = TimeBusConfig.Wand.wandEnergyCost;
         if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
             sendNotEnough(player, true);
             return false;
@@ -278,7 +278,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             sendNotEnough(player, false);
             return false;
         }
-        final int fluidNeed = TimeBusConfig.wandFluidCost;
+        final int fluidNeed = TimeBusConfig.Wand.wandFluidCost;
         final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
         final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
         if (taken == null || taken.getStackSize() < fluidNeed) {
@@ -290,14 +290,14 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
     /** Commit the AE power + Time Fluid payment (call after hasEnoughCosts). */
     private void commitCosts(final ItemStack stack) {
-        final double energyNeed = TimeBusConfig.wandEnergyCost;
+        final double energyNeed = TimeBusConfig.Wand.wandEnergyCost;
         this.extractAEPower(stack, energyNeed, Actionable.MODULATE);
         final ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
                 .registries().cell()
                 .getCellInventory(stack, null,
                         AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class));
         if (cell != null) {
-            final int fluidNeed = TimeBusConfig.wandFluidCost;
+            final int fluidNeed = TimeBusConfig.Wand.wandFluidCost;
             final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
             cell.extractItems(request, Actionable.MODULATE, null);
         }
@@ -347,7 +347,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         // Clamp as a defensive backstop: the config range is already capped, but
         // an old cfg file may still hold a huge value; a single-tick naked loop
         // must never be allowed to stall the server.
-        final int n = Math.max(1, Math.min(TimeBusConfig.wandBatchSize, 256));
+        final int n = Math.max(1, Math.min(TimeBusConfig.Wand.wandBatchSize, 256));
         for (int i = 1; i < n; i++) {
             try {
                 bus.tickingRequest(null, 1);
@@ -397,7 +397,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
     @Override
     public int getBytes(final ItemStack cellItem) {
-        return TimeBusConfig.wandBytes;
+        return TimeBusConfig.Wand.wandBytes;
     }
 
     @Override

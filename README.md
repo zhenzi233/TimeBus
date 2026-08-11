@@ -95,6 +95,11 @@ Prebuilt jars are published on the [Releases](https://github.com/zhenzi233/TimeB
 
 ## Configuration
 
+> ⚠️ v1.0.13: the config file is now grouped into categories (`bus` /
+> `timeGenerator` / `wand` / `mm` / `mek`). Keys from older versions are no longer
+> read — **delete `run/client/config/timebus.cfg` once after updating** so it
+> regenerates with the new layout.
+
 Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, localized via `config.timebus.*` lang keys in both `en_US` and `zh_CN`):
 
 ### Time Bus
@@ -111,6 +116,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | `Fluid Consumption Multiplier` | `2.0` | Per-card fluid consumption multiplier |
 | `Minimum Fluid` | `1000` | Min mB in the ME network before operating |
 | `Max Calls per Tick` | `128` | Work budget (acceleration calls per server tick) |
+| `Random Tick Calls per Speed Unit` | `20` | Block.randomTick calls per speed unit on randomly-ticking blocks (at 32x = 640 calls/block; lower it if random-tick acceleration starves the budget) |
 
 ### Time Fluid Generator
 
@@ -126,6 +132,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 
 | Option | Default | Description |
 | --- | --- | --- |
+| `Wand Cell Size (Bytes)` | `512` | Storage size of the wand's fluid cell in AE bytes (1 byte = 8000 mB) |
 | `Wand Speed Multipliers` | `2,4,8,16,32` | Per-card wand speed multipliers (comma-separated) |
 | `Wand Fluid Cost` | `10` | mB of Time Fluid consumed per use |
 | `Wand Energy Cost` | `1000` | AE consumed per use |
@@ -145,6 +152,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | Option | Default | Description |
 | --- | --- | --- |
 | `Mek Acceleration Enabled` | `false` | Re-run Mek machines' recipe tick multiple times per server tick: N extra ticks of progress per tick (N = bus speed multiplier, per-tick energy xN, total energy per recipe unchanged; covers all recipe-cache-driven machines incl. factories/chemical machines/PRC, excluding generators and instant-conversion machines) |
+| `Generator Acceleration Enabled` | `true` | Also speed up Mek generators (wind / gas / bio / solar / advanced solar / heat / large multiblock): while accelerated they insert N times more energy per tick without extra fuel - pure free power generation, intentionally unbalanced; independent of the recipe-acceleration switch above |
 
 > Known deviation: the Antiprotonic Nucleosynthesizer's recipe monitor advances
 > one extra tick itself, so it accelerates at N+1 with slightly higher per-tick

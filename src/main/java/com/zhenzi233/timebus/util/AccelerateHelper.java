@@ -103,7 +103,7 @@ public final class AccelerateHelper {
             TimeBus.LOGGER.warn("Time Bus: scheduleBlockUpdate failed at {}: {}", pos, e.toString());
         }
         runTileUpdates(world, pos, Math.max(0, speed - 1), speed, sourceKey);
-        runRandomTicks(world, pos, state, block, speed * TimeBusConfig.randomTickCallsPerSpeed);
+        runRandomTicks(world, pos, state, block, speed * TimeBusConfig.Bus.randomTickCallsPerSpeed);
     }
 
     /**
@@ -179,7 +179,7 @@ public final class AccelerateHelper {
             // branch is also taken while the feature is disabled so the useless
             // ITickable update-call path never wastes budget on these machines.
             case MM_CONTROLLER: {
-                if (TimeBusConfig.mmAccelerationEnabled) {
+                if (TimeBusConfig.MM.mmAccelerationEnabled) {
                     if (ModularMachineryAccelerator.isWandSource(sourceKey)) {
                         // 兜底：魔杖点击应走 ItemTimeWand.onItemUse 的 semi-permanent
                         // 注入路径；若意外走到这里也绝不注入永久 modifier。
@@ -200,10 +200,15 @@ public final class AccelerateHelper {
             // RecipeCacheLookupMonitor repeats CachedRecipe.process() `speed`
             // times per tick (one tick of progress per extra run).
             case MEK_MACHINE: {
-                if (TimeBusConfig.mekAccelerationEnabled) {
-                    if (MekanismAccelerator.registerOnce(world, target, speed, world.getTotalWorldTime())) {
-                        return 1;
-                    }
+                // 发电机（风力/燃气/生物/太阳能/热力/大型）走独立的"开挂产电"
+                // 开关（Mek 官方防加速，多产电不守恒）；其余配方机器走
+                // mekAccelerationEnabled 连拍开关（能耗守恒）。
+                final boolean generator = MekanismAccelerator.isGenerator(targetTE);
+                final boolean enabled = generator
+                        ? TimeBusConfig.Mek.mekGeneratorAccelerationEnabled
+                        : TimeBusConfig.Mek.mekAccelerationEnabled;
+                if (enabled && MekanismAccelerator.registerOnce(world, target, speed, world.getTotalWorldTime())) {
+                    return 1;
                 }
                 return 0;
             }

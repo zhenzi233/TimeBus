@@ -1,3 +1,63 @@
+config.timebus.title=时间总线配置
+config.timebus.category.bus=时间总线
+config.timebus.category.timeGenerator=时间流体发生器
+config.timebus.category.wand=时间杖
+config.timebus.category.mm=Modular Machinery
+config.timebus.category.mek=Mekanism
+config.timebus.bus.speedMultipliers=速度倍率
+config.timebus.bus.idlePower=空闲耗电（AE/t）
+config.timebus.bus.powerPerSpeed=每速度单位能耗倍率
+config.timebus.bus.randomTickCallsPerSpeed=每个速度单位的随机刻调用次数
+config.timebus.bus.fluidMode=流体模式
+config.timebus.bus.fluidName=消耗流体
+config.timebus.bus.fluidPerTick=每 tick 流体消耗（mB）
+config.timebus.bus.fluidConsumeMultiplier=流体消耗倍率（每张卡）
+config.timebus.bus.minFluid=最小流体量（mB）
+config.timebus.bus.capacityWidths=容量宽度
+config.timebus.bus.maxCallsPerTick=每 tick 最大调用次数（工作预算）
+config.timebus.bus.speedMultipliers.comment=每张速度卡的加速倍率（逗号分隔）。第 N 个值 = 安装 N-1 张卡时的倍率；卡数超过数值个数时取最后一个。示例：2,4,8,16,32 -> 0卡=2倍, 1卡=4倍, 2卡=8倍, 3卡=16倍, 4卡=32倍
+config.timebus.bus.idlePower.comment=空闲（未加速）时每 tick 消耗的 AE 能量。默认 1.0
+config.timebus.bus.powerPerSpeed.comment=能耗倍率。每 tick 总耗电 = max(空闲耗电, (有效速度 + 2 × 升级卡数) × 该倍率)。默认 0.5
+config.timebus.bus.randomTickCallsPerSpeed.comment=每个速度单位对随机刻方块（作物、草蔓延、冰融化等）执行的 Block.randomTick 次数。32 倍速度时默认 20 会让每方块执行 640 次，可能占用大量工作预算；随机刻加速挤占其他方块时可调低。默认 20
+config.timebus.bus.fluidMode.comment=开启后时间总线从 ME 网络消耗流体代替 AE 能量
+config.timebus.bus.fluidName.comment=要消耗的流体注册名（如 water、lava）。默认 water
+config.timebus.bus.fluidPerTick.comment=加速时每 tick 消耗的流体 mB（支持小数，如 0.1 = 每 10 tick 1 mB）。默认 1.0
+config.timebus.bus.fluidConsumeMultiplier.comment=每张速度卡将流体消耗乘以该值。实际速率 = fluidPerTick × (该值 ^ 卡数)。默认 2.0
+config.timebus.bus.minFluid.comment=ME 网络中至少保留多少 mB 流体才开始消耗。默认 1000（= 1 桶）
+config.timebus.bus.capacityWidths.comment=每张容量卡的加速宽度（逗号分隔）。第 N 个值 = 安装 N-1 张卡时的宽度（1 = 单方块）；卡数超过数值个数时取最后一个。示例：1,3,9,15 -> 0卡=1, 1卡=3, 2卡=9, 3卡=15
+config.timebus.bus.maxCallsPerTick.comment=每服务器 tick 最多执行的加速调用次数（方块实体更新 + 随机刻）。超出预算的工作顺延到下一 tick，即使满配速度卡和大范围也能保持服务器流畅。默认 128
+config.timebus.timeGenerator.matterBallUnit=物质球当量
+config.timebus.timeGenerator.singularityUnit=奇点当量
+config.timebus.timeGenerator.unitsPerBatch=每批所需当量
+config.timebus.timeGenerator.timeFluidPerBatch=每批产出时间流体（mB）
+config.timebus.timeGenerator.generatorConsumePerTick=每次更新消耗的输入数
+config.timebus.timeGenerator.matterBallUnit.comment=每个物质球贡献的进度当量。默认 1
+config.timebus.timeGenerator.singularityUnit.comment=每个奇点贡献的进度当量。奇点价值 1000 个物质球，中途切换输入模式时进度得以保留。默认 1000
+config.timebus.timeGenerator.unitsPerBatch.comment=生产一批时间流体所需的总当量。64000 当量 = 64000 个物质球或 64 个奇点。默认 64000
+config.timebus.timeGenerator.timeFluidPerBatch.comment=一批完整生产产出的时间流体 mB。默认 1000
+config.timebus.timeGenerator.generatorConsumePerTick.comment=每次更新调用消耗的输入物品数。通常每 tick 一次更新；时间总线加速时每 tick 多次调用 update，吞吐随加速线性提升。输入槽本身始终可堆叠 64 个。默认 64
+config.timebus.wand.wandBytes=时间杖单元容量（字节）
+config.timebus.wand.wandSpeedMultipliers=时间杖速度倍率
+config.timebus.wand.wandFluidCost=时间杖流体消耗（mB）
+config.timebus.wand.wandEnergyCost=时间杖能量消耗（AE）
+config.timebus.wand.wandBatchSize=时间杖总线批量次数
+config.timebus.wand.wandBytes.comment=时间杖流体单元的存储容量（AE 字节）。AE2 流体存储每字节 8000 mB（AE2EL getUnitsPerByte），默认 512 字节 = 4,096,000 mB = 4096 桶。默认 512
+config.timebus.wand.wandSpeedMultipliers.comment=时间杖每张速度卡的倍率（逗号分隔，速度卡经 AE2 单元工作台放入）。第 N 个值 = 安装 N-1 张卡时的倍率；卡数超过数值个数时取最后一个。独立于总线的 speedMultipliers。示例同总线
+config.timebus.wand.wandFluidCost.comment=每次使用时间杖（潜行+右键）消耗的时间流体 mB。默认 10
+config.timebus.wand.wandEnergyCost.comment=每次使用时间杖（潜行+右键）消耗的 AE 能量。默认 1000
+config.timebus.wand.wandBatchSize.comment=右键 ME 输入/输出总线时连续运行的总线工作次数（每次批量移动总线正常每 tick 的量，受其速度卡加成）。单 tick 内完成，过大会卡服——保持远低于时间总线工作预算。默认 16，上限 256
+config.timebus.mm.mmAccelerationEnabled=MM 加速
+config.timebus.mm.mmKeepThreadsEnabled=MM 保留空闲线程
+config.timebus.mm.mmEnergyFollowsSpeed=MM 能耗跟随速度
+config.timebus.mm.mmContextRefreshInterval=MM 上下文刷新间隔（tick）
+config.timebus.mm.mmAccelerationEnabled.comment=开启后时间总线通过压缩 MM 自身 modifier 系统中的配方时长来加速 MM(CE) 控制器，而不是调用 update()（会被受限 tick 防加速设计拦截）。倍率跟随总线速度卡（0卡=2倍，满配=32倍）。默认 false
+config.timebus.mm.mmKeepThreadsEnabled.comment=开启后被时间总线加速的 MM 工厂控制器保留空闲线程，不让 MM 回收。MM 在 200 tick 后回收空闲线程，会清掉注入的速度 modifier 并让线程短暂跌回原速直到时间总线重新注入。默认 true
+config.timebus.mm.mmEnergyFollowsSpeed.comment=开启后加速机器的能耗按比例放大：每 tick 能耗（输入）与产出（输出）乘以与配方时长加速相同的倍数，单次配方总能耗不变、产出速率提升。需要开启 MM 加速。默认 true
+config.timebus.mm.mmContextRefreshInterval.comment=时间总线每隔多少 tick 强制重新注入 MM modifier（先移除再加，触发 MM flushContextModifier）。MM 会池化复用配方合成上下文，实际生效的 modifier 可能与 permanent 源脱节；该周期刷新在一个间隔内自愈。20 tick = 1 秒。0 = 关闭（线程可能直到速度变化都不加速）。默认 20
+config.timebus.mek.mekAccelerationEnabled=Mek 加速
+config.timebus.mek.mekGeneratorAccelerationEnabled=发电机加速
+config.timebus.mek.mekAccelerationEnabled.comment=开启后时间总线加速 Mekanism(CE-Unofficial) 机器：每服务器 tick 重复运行配方刻多次（每次额外推进 1 刻并消耗 1 刻能量，单次配方总耗电不变）。需要 Mekanism-CE-Unofficial；缺失或版本不匹配时静默跳过。默认 false
+config.timebus.mek.mekGeneratorAccelerationEnabled.comment=开启后时间总线/时间杖加速 Mek 发电机（风力/燃气/生物/太阳能/先进太阳能/热力/大型多模块）：加速时每 tick 多产 N 倍电（N=总线速度倍率）且不额外消耗燃料——纯免费产电，刻意不平衡。绕过 Mek 自身的受限 tick 防加速设计。需要 Mekanism-CE-Unofficial；缺失或版本不匹配时静默跳过。默认 true
 item.timebus.time_bus.name=时间总线
 item.timebus.debug_wand.name=调试棒
 item.timebus.time_wand.name=时间杖

@@ -7,6 +7,7 @@ import com.zhenzi233.timebus.item.ItemTimeInscriberTemplate;
 import com.zhenzi233.timebus.item.ItemTimeProcessor;
 import com.zhenzi233.timebus.item.ItemTimeWand;
 import com.zhenzi233.timebus.part.ItemTimeBus;
+import com.zhenzi233.timebus.config.TimeBusConfig;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
 import net.minecraftforge.client.model.ModelLoader;
@@ -66,5 +67,8 @@ public class ClientProxy implements IProxy {
 
     @Override
     public void postInit(FMLPostInitializationEvent event) {
+        // 配置描述本地化：Forge 1.12.2 的 @Config.Comment 不走 lang key，
+        // 在语言资源加载完成后把 cfg 注释替换为当前语言的文本。
+        TimeBusConfig.localizeComments();
     }
 }

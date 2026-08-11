@@ -108,6 +108,19 @@ src/main/java/com/zhenzi233/timebus/
 
 ## 5. 配置项（TimeBusConfig）
 
+Forge 1.12.2 `@Config` 按功能分类组织（嵌套静态类），cfg 键带分类前缀：
+
+| 分类 | cfg 前缀 | 内容 |
+| --- | --- | --- |
+| `Bus` | `bus` | 时间总线：倍率/耗电/流体模式/容量/工作预算 |
+| `TimeGenerator` | `timeGenerator` | 时间流体发生器换算 |
+| `Wand` | `wand` | 时间杖容量/倍率/消耗/批量次数 |
+| `MM` | `mm` | Modular Machinery 加速 |
+| `Mek` | `mek` | Mekanism 连拍与发电机加速 |
+
+> 注意：分类会改变 cfg 键路径，升级自旧版（键平铺在 `general` 下）的玩家需要
+> 重新设置一次；旧键残留但不生效，可手动清理 `timebus.cfg` 的 `general` 段。
+
 | 配置 | 默认 | 说明 |
 |---|---|---|
 | `speedMultipliers` | `"2,4,8,16,32"` | 总线加速卡倍率（逗号分隔字符串，解析一次并缓存，第 N 个 = N-1 张卡） |
@@ -402,6 +415,46 @@ MM 注入配方时长 modifier 时曾把构造器第一个参数（RequirementTy
 4. **统一层可避免反射与重复推进**：最初实现注入 `ElectricMachine.onAsyncUpdateServer` 的 `processRecipe()` 调用点，需反射调 protected 方法，且只覆盖简单电机器；改到 `RecipeCacheLookupMonitor.updateAndProcess()` 的 `process()` 调用点后，`process()` 是 public 可直接调用，一个注入点覆盖全部配方机器。
 5. **能耗语义**：连拍每 tick 扣 N 倍 `perTickEnergy`、时长 1/N，总耗电守恒；能量不足时 `calculateOperationsThisTick` 会限制推进（安全）。玩家感知与 Mek 官方速度卡（总耗电放大）不同，属预期。
 6. **Mixin 应用失败的日志**：`Mixin apply for mod main failed ... InvalidInjectionException`（WARN 级，required=false 配置下跳过不崩）——排查注入问题先搜这行，比看游戏内效果快。
+
+### 10.7.2 发电机加速（开挂产电，v1.0.13 新增）
+
+**设计**：Mek 所有发电机（风力 / 燃气 / 生物 / 太阳能 / 先进太阳能 / 热力 /
+大型多模块）都继承 `TileEntityRestrictedTick` 防加速体系（final `update()` +
+世界 tick 去重），且没有配方缓存，连拍与 update spam 均不适用。要加速只能直接
+放大发电量。
+
+**统一注入点**：所有异步发电机最终都在 `onAsyncUpdateServer()` 通过
+`MachineEnergyContainer.insert(amount, EXECUTE, INTERNAL)` 插电，热力发电机则在
+同步的 `simulateGeneratorHeat()` 插电。用 `@Redirect` 把该调用点的电量参数放大
+N 倍（N = 总线速度倍率）：
+
+- `MixinMekanismGenerators`：targets 六台异步发电机（含大型风机/大型燃气），
+  method = `onAsyncUpdateServer`；先进太阳能继承太阳能类，自动覆盖。
+- `MixinMekanismHeatGenerator`：targets 热力发电机，method = `simulateGeneratorHeat`。
+- handler 只放大 `Action.EXECUTE` 调用；`SIMULATE`（容量预检）保持原值，避免
+  干扰 `canOperate` 判断。**@Redirect 会完全替换原调用**：handler 必须手动执行
+  `container.insert(toInsert, action, type)` 并返回其结果，否则能量永远不会被
+  插入（机器照常运转但储能不涨）——这是初版实测踩过的坑。
+
+**语义**：纯多产电、能量不守恒（时间压缩让机器多转且不额外烧燃料，效率翻倍），
+刻意开挂；独立配置项 `mekGeneratorAccelerationEnabled`（默认 true）控制，且
+`AccelerateHelper` 的 MEK_MACHINE 分支用 `MekanismAccelerator.isGenerator`（反射
+判断 `TileEntityGenerator` 子类）为发电机单独走该开关。
+
+**踩过的坑**：
+1. **@Shadow 不能定位继承方法**（Mixin 0.8.7 的 attachShadowMethod 只在目标类
+   自身找，失败抛 InvalidMixinException 导致整个 mixin 应用失败被跳过）——初版
+   风力发电机的 `getActive()` / `getEnergyContainer()` 用 @Shadow 就因此静默失效，
+   日志可见 `Mixin apply for mod main failed`。改为统一 @Redirect insert 后不再
+   需要 @Shadow 任何方法。
+2. import 发电机父类会踩 IC2 编译坑（TileEntityElectricBlock 继承链引用
+   IEnergyReceiver，不在编译 classpath）——统一 @Redirect 的 receiver 参数直接用
+   `MachineEnergyContainer`（可安全 import），完全不碰发电机类本身。
+
+**验证**：游戏内把总线正对任意发电机插卡，观察能量容器每 tick 涨速是否按倍率
+放大（热力发电机的 GUI 产电显示也会放大）；拆除总线后涨速应立刻恢复原速。排查
+注入问题先搜日志 `Mixin apply for mod main failed`（WARN 级，required=false 下
+静默跳过）。
 
 ## 11. 可单测的纯逻辑边界
 

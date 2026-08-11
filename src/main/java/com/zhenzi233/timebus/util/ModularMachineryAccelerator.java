@@ -184,7 +184,7 @@ public final class ModularMachineryAccelerator {
         final String energyInKey = keyForEnergyIn(sourceKey);
         final String energyOutKey = keyForEnergyOut(sourceKey);
         final float durationTarget = 1.0f / accelerate;
-        final boolean scaleEnergy = TimeBusConfig.mmEnergyFollowsSpeed;
+        final boolean scaleEnergy = TimeBusConfig.MM.mmEnergyFollowsSpeed;
         final boolean forceRefresh = shouldForceRefresh(te);
         // 稳态快路径：状态未变且未到强制刷新周期时跳过整轮反射巡检。
         if (!forceRefresh && isAppliedState(te, sourceKey, accelerate, scaleEnergy)) {
@@ -298,7 +298,7 @@ public final class ModularMachineryAccelerator {
         if (te == null || te.getWorld() == null) {
             return false;
         }
-        final int interval = TimeBusConfig.mmContextRefreshInterval;
+        final int interval = TimeBusConfig.MM.mmContextRefreshInterval;
         if (interval <= 0) {
             return false;
         }
@@ -585,7 +585,7 @@ public final class ModularMachineryAccelerator {
         final String energyInKey = keyForEnergyIn(sourceKey);
         final String energyOutKey = keyForEnergyOut(sourceKey);
         final float durationTarget = 1.0f / speed;
-        final boolean scaleEnergy = TimeBusConfig.mmEnergyFollowsSpeed;
+        final boolean scaleEnergy = TimeBusConfig.MM.mmEnergyFollowsSpeed;
         boolean touched = false;
         try {
             final Method threadsGetter = getRecipeThreadListFor(te);

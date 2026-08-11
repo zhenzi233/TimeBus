@@ -1,6 +1,5 @@
 package com.zhenzi233.timebus.client.gui;
 
-import appeng.api.config.Upgrades;
 import appeng.client.gui.implementations.GuiUpgradeable;
 import appeng.core.localization.GuiText;
 import com.zhenzi233.timebus.part.PartTimeBus;
@@ -49,8 +48,9 @@ public class GuiTimeBus extends GuiUpgradeable {
 
         if (this.bc instanceof PartTimeBus) {
             PartTimeBus part = (PartTimeBus) this.bc;
-            int speed = part.getEffectiveSpeed();
-            int cards = part.getInstalledUpgrades(Upgrades.SPEED);
+            ContainerTimeBus container = (ContainerTimeBus) this.cvb;
+            int speed = container.syncedSpeed;
+            int cards = container.syncedSpeedCards;
 
             // Override title
             this.fontRenderer.drawString(I18n.format("gui.timebus.title"), 8, 6, 4210752);
@@ -59,20 +59,19 @@ public class GuiTimeBus extends GuiUpgradeable {
             this.fontRenderer.drawString(I18n.format("gui.timebus.speed", speed, cards), 8, 25, 4210752);
 
             int yOffset = 37;
-            int capCards = part.getInstalledUpgrades(Upgrades.CAPACITY);
+            int capCards = container.syncedCapacityCards;
             if (capCards > 0) {
-                this.fontRenderer.drawString(TextFormatting.GRAY + I18n.format("gui.timebus.range", part.getCapacityWidth()), 8, yOffset, 4210752);
+                this.fontRenderer.drawString(TextFormatting.GRAY + I18n.format("gui.timebus.range", container.syncedCapacityWidth), 8, yOffset, 4210752);
                 yOffset += 12;
             }
 
             // Power draw info
-            double power = part.getPowerDraw();
+            double power = container.syncedPowerDraw / 100.0;
             String powerText = TextFormatting.AQUA + I18n.format("gui.timebus.power", power);
             this.fontRenderer.drawString(powerText, 8, yOffset, 4210752);
             yOffset += 12;
 
             // Work budget usage (synced via AE2 @GuiSync)
-            ContainerTimeBus container = (ContainerTimeBus) this.cvb;
             int used = container.budgetUsed;
             int total = container.budgetTotal;
             String budgetText = TextFormatting.GREEN + I18n.format("gui.timebus.budget", used, total);
@@ -80,10 +79,10 @@ public class GuiTimeBus extends GuiUpgradeable {
             yOffset += 12;
 
             // Fluid mode info
-            if (TimeBusConfig.fluidMode) {
+            if (TimeBusConfig.Bus.fluidMode) {
                 this.fontRenderer.drawString(TextFormatting.DARK_AQUA + I18n.format("gui.timebus.fluid_title", part.getFluidDisplayName()), 8, yOffset, 4210752);
                 yOffset += 12;
-                this.fontRenderer.drawString(TextFormatting.AQUA + I18n.format("gui.timebus.fluid_rate", part.getFluidRate()), 8, yOffset, 4210752);
+                this.fontRenderer.drawString(TextFormatting.AQUA + I18n.format("gui.timebus.fluid_rate", container.syncedFluidRate / 100.0), 8, yOffset, 4210752);
             }
         }
     }

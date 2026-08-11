@@ -109,7 +109,7 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
         // forced externally (NBT / another mod), consume the input instead of
         // letting it sit in the slot forever.
         if (mode == CondenserOutput.TRASH) {
-            this.inputSlot.extractItem(0, TimeBusConfig.generatorConsumePerTick, false);
+            this.inputSlot.extractItem(0, TimeBusConfig.TimeGenerator.generatorConsumePerTick, false);
             return;
         }
 
@@ -117,20 +117,20 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
 
         double unitValue;
         if (mode == CondenserOutput.MATTER_BALLS && isMatterBall(input)) {
-            unitValue = TimeBusConfig.matterBallUnit;
+            unitValue = TimeBusConfig.TimeGenerator.matterBallUnit;
         } else if (mode == CondenserOutput.SINGULARITY && isSingularity(input)) {
-            unitValue = TimeBusConfig.singularityUnit;
+            unitValue = TimeBusConfig.TimeGenerator.singularityUnit;
         } else {
             // Mismatched input: keep it in the slot so the player can pull it out.
             return;
         }
 
         // No room for at least one full batch: keep the input in the slot.
-        if (space < TimeBusConfig.timeFluidPerBatch) {
+        if (space < TimeBusConfig.TimeGenerator.timeFluidPerBatch) {
             return;
         }
 
-        ItemStack consumed = this.inputSlot.extractItem(0, TimeBusConfig.generatorConsumePerTick, false);
+        ItemStack consumed = this.inputSlot.extractItem(0, TimeBusConfig.TimeGenerator.generatorConsumePerTick, false);
         if (consumed.isEmpty()) {
             return;
         }
@@ -144,10 +144,10 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
         this.progressUnits += unitValue * consumedCount;
 
         // Produce as many full batches as the accumulated units allow.
-        while (this.progressUnits >= TimeBusConfig.unitsPerBatch && space >= TimeBusConfig.timeFluidPerBatch) {
-            this.progressUnits -= TimeBusConfig.unitsPerBatch;
-            this.storedFluid += TimeBusConfig.timeFluidPerBatch;
-            space -= TimeBusConfig.timeFluidPerBatch;
+        while (this.progressUnits >= TimeBusConfig.TimeGenerator.unitsPerBatch && space >= TimeBusConfig.TimeGenerator.timeFluidPerBatch) {
+            this.progressUnits -= TimeBusConfig.TimeGenerator.unitsPerBatch;
+            this.storedFluid += TimeBusConfig.TimeGenerator.timeFluidPerBatch;
+            space -= TimeBusConfig.TimeGenerator.timeFluidPerBatch;
             this.markDirty();
         }
     }
@@ -204,7 +204,7 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
 
     /** Total units required for one batch. */
     public double getUnitsPerBatch() {
-        return TimeBusConfig.unitsPerBatch;
+        return TimeBusConfig.TimeGenerator.unitsPerBatch;
     }
 
     public long getMatterBallCount() {

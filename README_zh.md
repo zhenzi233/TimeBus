@@ -100,6 +100,10 @@ gradlew.bat build
 
 ## 配置
 
+> ⚠️ v1.0.13：配置文件改为按分类组织（`bus` / `timeGenerator` / `wand` / `mm` /
+> `mek`）。旧版本的配置键不再被读取——**更新后请删除
+> `run/client/config/timebus.cfg` 一次**，让其按新结构重新生成。
+
 运行时会生成配置文件 `run/client/config/timebus.cfg`（Forge 配置，已通过 `config.timebus.*` lang 键本地化为中英双语）：
 
 ### 时间总线
@@ -116,6 +120,7 @@ gradlew.bat build
 | `Fluid Consumption Multiplier` | `2.0` | 每张速度卡的流体消耗倍率 |
 | `Minimum Fluid` | `1000` | ME 网络中至少保留多少 mB 才启动 |
 | `Max Calls per Tick` | `128` | 工作预算（每服务器 tick 的加速调用次数） |
+| `Random Tick Calls per Speed Unit` | `20` | 每个速度单位对随机刻方块执行的 Block.randomTick 调用次数（32x 时每方块 640 次；若随机刻加速挤占预算可调低） |
 
 ### 时间流体发生器
 
@@ -131,6 +136,7 @@ gradlew.bat build
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
+| `Wand Cell Size (Bytes)` | `512` | 时间杖流体存储单元的容量（AE 字节，1 字节 = 8000 mB） |
 | `Wand Speed Multipliers` | `2,4,8,16,32` | 每张速度卡的时间杖倍率（逗号分隔） |
 | `Wand Fluid Cost` | `10` | 每次使用消耗的时间流体 mB |
 | `Wand Energy Cost` | `1000` | 每次使用消耗的 AE 能量 |
@@ -150,6 +156,7 @@ gradlew.bat build
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `Mek Acceleration Enabled` | `false` | 是否连拍加速 Mek 机器：每 tick 额外推进 N 刻配方进度（N=总线速度倍率，每 tick 能耗同倍放大、单次配方总耗电守恒；覆盖所有基于配方缓存推进的加工机器，含工厂/化学机器/PRC 等，发电机与即时转换类机器除外） |
+| `Generator Acceleration Enabled` | `true` | 是否加速 Mek 发电机（风力/燃气/生物/太阳能/先进太阳能/热力/大型多模块）：加速时每 tick 多产 N 倍电（N=总线速度倍率）且不额外消耗燃料——纯开挂产电、能量不守恒，独立于上面的连拍开关 |
 
 > 已知偏差：反质子核合成机（Antiprotonic Nucleosynthesizer）的配方监视器自身
 > 会额外推进一次，实际加速为 N+1 倍、每 tick 能耗略高（约多 1/(N+1)），属

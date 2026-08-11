@@ -2,6 +2,27 @@
 
 > 说明：本仓库自 v1.0.4 起维护 CHANGELOG；更早版本（v1.0.0–v1.0.3）为开发期版本，未收录变更记录。
 
+## v1.0.13
+
+> ⚠️ **配置重组**：配置文件改为按分类组织（`bus` / `timeGenerator` / `wand` / `mm` /
+> `mek`）。旧版本平铺在 `general` 分类下的键不再被读取——**更新后请删除
+> `run/client/config/timebus.cfg`（或重置配置）一次**，让配置文件按新结构重新生成。
+
+- Feature: Time Bus / Time Wand now speed up Mekanism generators (wind / gas / bio /
+  solar / advanced solar / heat / large multiblock) — while accelerated they insert
+  N times more energy per tick without extra fuel, pure free power generation
+  (intentionally unbalanced; new `Generator Acceleration Enabled` option, default true)
+- Fix: generator boost no longer swallows the energy insert (the @Redirect handler
+  now performs the real container insert)
+- Fix: Time Bus GUI speed / range / power / fluid rate now sync from the server-side
+  part, so the display updates immediately when upgrades are inserted
+- Change: config fields and descriptions are localized (Chinese when the game
+  language is Chinese, English otherwise)
+- Test: JUnit skeleton with 16 passing tests (config parsing, active speed table,
+  index fallback)
+- Chore: README version badge is now dynamic, mod metadata + Forge update JSON added,
+  code cleanup, upgrade-count caching, javadoc jar enabled
+
 ## v1.0.12
 
 - Change: Mekanism acceleration now works by re-running the machine's recipe

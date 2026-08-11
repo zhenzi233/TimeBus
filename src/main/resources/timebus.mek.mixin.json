@@ -6,7 +6,9 @@
     "client": [],
     "mixins": [
         "MixinMekanismCacheLoop",
-        "MixinMekanismSync"
+        "MixinMekanismSync",
+        "MixinMekanismGenerators",
+        "MixinMekanismHeatGenerator"
     ],
     "server": [],
     "setSourceFile": true,

@@ -36,6 +36,10 @@ public final class MekanismAccelerator {
     private static volatile boolean available;
     private static volatile Class<?> restrictedTickClass;
 
+    private static volatile boolean generatorResolved;
+    private static volatile boolean generatorAvailable;
+    private static volatile Class<?> generatorClass;
+
     /** True if the tile is a Mekanism (CE-Unofficial) machine. */
     public static boolean isMachine(final TileEntity te) {
         if (te == null) {
@@ -43,6 +47,15 @@ public final class MekanismAccelerator {
         }
         resolve();
         return available && restrictedTickClass.isInstance(te);
+    }
+
+    /** True if the tile is a Mek generator (wind/gas/bio/solar/heat, incl. large multiblock). */
+    public static boolean isGenerator(final TileEntity te) {
+        if (te == null) {
+            return false;
+        }
+        resolveGenerator();
+        return generatorAvailable && generatorClass.isAssignableFrom(te.getClass());
     }
 
     /**
@@ -90,6 +103,26 @@ public final class MekanismAccelerator {
             } finally {
                 resolved = true;
             }
+        }
+    }
+
+    /** 解析发电机基类 TileEntityGenerator（普通与大型发电机都继承它）。 */
+    private static void resolveGenerator() {
+        if (generatorResolved) {
+            return;
+        }
+        synchronized (MekanismAccelerator.class) {
+            if (generatorResolved) {
+                return;
+            }
+            try {
+                generatorClass = Class.forName("mekanism.generators.common.tile.TileEntityGenerator");
+                generatorAvailable = true;
+            } catch (Exception e) {
+                TimeBus.LOGGER.warn("Time Bus: Mek generator acceleration unavailable: {}", e.toString());
+                generatorAvailable = false;
+            }
+            generatorResolved = true;
         }
     }
 }
