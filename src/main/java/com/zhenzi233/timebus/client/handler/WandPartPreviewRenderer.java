@@ -143,7 +143,12 @@ public class WandPartPreviewRenderer {
     /** 可加速普通方块的整体线框预览(两次深度 pass,与 part 预览同款样式)。 */
     private static void renderBlockPreview(BlockPos pos, EntityPlayer player, float partialTicks) {
         final List<AxisAlignedBB> boxes = new ArrayList<>();
-        boxes.add(Minecraft.getMinecraft().world.getBlockState(pos).getSelectedBoundingBox(Minecraft.getMinecraft().world, pos));
+        // getSelectedBoundingBox 返回世界坐标盒:先减去 pos 转成本地盒,
+        // 与 part 预览的偏移管线(offsetBoxes 再统一 offset 到相机空间)一致,
+        // 否则会双重偏移把线框画到错误位置。
+        final AxisAlignedBB worldBox = Minecraft.getMinecraft().world.getBlockState(pos)
+                .getSelectedBoundingBox(Minecraft.getMinecraft().world, pos);
+        boxes.add(worldBox.offset(-pos.getX(), -pos.getY(), -pos.getZ()));
         offsetBoxes(boxes, pos, player, partialTicks);
         renderBoxes(boxes, true);
         renderBoxes(boxes, false);
