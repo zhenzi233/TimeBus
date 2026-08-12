@@ -62,6 +62,17 @@ public final class ModularMachineryAccelerator {
     public static final String SOURCE_WAND_PREFIX = "wand:";
 
     /**
+     * MM 配方时长加速的等效倍率上限。
+     *
+     * <p>时长 modifier 为乘法（配方总时长 × 1/speed），MM 每 tick 用
+     * {@code Math.round} 把结果取整为 {@code totalTick}：倍率过高（多台总线/
+     * 魔杖叠加、或配置把倍率调大）时 totalTick 会被取整成 0/1，配方表现为
+     * "完成但不出货"或进度异常。32x 下 1 秒配方（20 tick）仍可取整为 1 tick，
+     * 是安全上限；能耗 modifier 与时长共用同一有效倍率，保证单次配方总耗电守恒。
+     */
+    private static final int MAX_MM_EFFECTIVE_SPEED = 32;
+
+    /**
      * 来源标识是否来自时间杖：总线走每 tick 注入路径，魔杖走 semi-permanent
      * 配方加速路径（配方完成自动恢复）。判定收拢到一处，避免各处裸字符串前缀。
      */
@@ -203,11 +214,13 @@ public final class ModularMachineryAccelerator {
         final String durationKey = keyFor(sourceKey);
         final String energyInKey = keyForEnergyIn(sourceKey);
         final String energyOutKey = keyForEnergyOut(sourceKey);
-        final float durationTarget = 1.0f / accelerate;
+        // 有效倍率封顶:防叠加/极端配置把配方时长压到取整为 0/1 tick(见常量注释)。
+        final int effectiveSpeed = Math.min(accelerate, MAX_MM_EFFECTIVE_SPEED);
+        final float durationTarget = 1.0f / effectiveSpeed;
         final boolean scaleEnergy = TimeBusConfig.MM.mmEnergyFollowsSpeed;
         final boolean forceRefresh = shouldForceRefresh(te);
         // 稳态快路径：状态未变且未到强制刷新周期时跳过整轮反射巡检。
-        if (!forceRefresh && isAppliedState(te, sourceKey, accelerate, scaleEnergy)) {
+        if (!forceRefresh && isAppliedState(te, sourceKey, effectiveSpeed, scaleEnergy)) {
             return false;
         }
         boolean touched = false;
@@ -239,12 +252,12 @@ public final class ModularMachineryAccelerator {
                     touched = true;
                 }
                 if (scaleEnergy) {
-                    // 能耗守恒：input（消耗）与 output（产出）都 x speed，
+                    // 能耗守恒：input（消耗）与 output（产出）都 x effectiveSpeed，
                     // 与时长压缩相抵，单次配方总耗电/总产出不变。
-                    if (ensureModifier(thread, energyInKey, recipeEnergyType, ioInput, accelerate, forceRefresh)) {
+                    if (ensureModifier(thread, energyInKey, recipeEnergyType, ioInput, effectiveSpeed, forceRefresh)) {
                         touched = true;
                     }
-                    if (ensureModifier(thread, energyOutKey, recipeEnergyType, ioOutput, accelerate, forceRefresh)) {
+                    if (ensureModifier(thread, energyOutKey, recipeEnergyType, ioOutput, effectiveSpeed, forceRefresh)) {
                         touched = true;
                     }
                 } else {
@@ -255,10 +268,10 @@ public final class ModularMachineryAccelerator {
             if (touched) {
                 rememberInjected(te, sourceKey);
                 TimeBus.LOGGER.info("Time Bus: MM applied source={} speed={} at {} ({} threads, tile {})",
-                        sourceKey, accelerate, te.getPos(), threads.length, te.getClass().getSimpleName());
+                        sourceKey, effectiveSpeed, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
             // 无论本轮是否实际改动，都刷新快照，使后续 tick 可走快路径。
-            rememberApplied(te, sourceKey, accelerate, scaleEnergy);
+            rememberApplied(te, sourceKey, effectiveSpeed, scaleEnergy);
             return touched;
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: MM acceleration failed at {}: {}", te.getPos(), e.toString());
@@ -627,7 +640,10 @@ public final class ModularMachineryAccelerator {
         final String durationKey = keyFor(sourceKey);
         final String energyInKey = keyForEnergyIn(sourceKey);
         final String energyOutKey = keyForEnergyOut(sourceKey);
-        final float durationTarget = 1.0f / speed;
+        // 有效倍率封顶:与总线路径一致,防止叠加/极端配置把配方时长压到
+        // 取整为 0/1 tick(见 MAX_MM_EFFECTIVE_SPEED 注释);能耗同步用该值。
+        final int effectiveSpeed = Math.min(speed, MAX_MM_EFFECTIVE_SPEED);
+        final float durationTarget = 1.0f / effectiveSpeed;
         final boolean scaleEnergy = TimeBusConfig.MM.mmEnergyFollowsSpeed;
         boolean touched = false;
         try {
@@ -654,10 +670,10 @@ public final class ModularMachineryAccelerator {
                     touched = true;
                 }
                 if (scaleEnergy) {
-                    if (ensureSemiModifier(thread, energyInKey, recipeEnergyType, ioInput, speed)) {
+                    if (ensureSemiModifier(thread, energyInKey, recipeEnergyType, ioInput, effectiveSpeed)) {
                         touched = true;
                     }
-                    if (ensureSemiModifier(thread, energyOutKey, recipeEnergyType, ioOutput, speed)) {
+                    if (ensureSemiModifier(thread, energyOutKey, recipeEnergyType, ioOutput, effectiveSpeed)) {
                         touched = true;
                     }
                 }
@@ -665,7 +681,7 @@ public final class ModularMachineryAccelerator {
             if (touched) {
                 rememberSemiInjected(te, sourceKey);
                 TimeBus.LOGGER.info("Time Bus: wand MM semi-accelerated source={} speed={} at {} ({} threads, tile {})",
-                        sourceKey, speed, te.getPos(), threads.length, te.getClass().getSimpleName());
+                        sourceKey, effectiveSpeed, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
             return touched;
         } catch (Exception e) {
