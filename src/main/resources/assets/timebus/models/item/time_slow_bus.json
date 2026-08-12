@@ -2,12 +2,13 @@
     "parent": "timebus:item/part/part",
     "textures": {
         "sides": "timebus:parts/import_bus_sides",
+        "sidesStatus": "timebus:parts/monitor_sides_status",
         "front": "timebus:items/part/import_bus"
     },
     "elements": [
         {
-            "from": [ 4, 4, 8 ],
-            "to": [ 12, 12, 10 ],
+            "from": [ 4, 4, 0 ],
+            "to": [ 12, 12, 2 ],
             "faces": {
                 "north": { "uv": [ 4, 4, 12, 12 ], "texture": "#front" },
                 "east":  { "uv": [ 2, 4, 4, 12 ], "rotation": 180, "texture": "#sides" },
@@ -18,8 +19,8 @@
             }
         },
         {
-            "from": [ 5, 5, 7 ],
-            "to": [ 11, 11, 8 ],
+            "from": [ 5, 5, 2 ],
+            "to": [ 11, 11, 3 ],
             "faces": {
                 "north": { "uv": [ 5, 5, 11, 11 ], "texture": "#front" },
                 "east":  { "uv": [ 1, 5, 2, 11 ], "texture": "#sides" },
@@ -30,8 +31,8 @@
             }
         },
         {
-            "from": [ 6, 6, 6 ],
-            "to": [ 10, 10, 7 ],
+            "from": [ 6, 6, 3 ],
+            "to": [ 10, 10, 4 ],
             "faces": {
                 "north": { "uv": [ 6, 6, 10, 10 ], "texture": "#front" },
                 "east":  { "uv": [ 0, 6, 1, 10 ], "texture": "#sides" },
@@ -39,6 +40,18 @@
                 "west":  { "uv": [ 15, 6, 16, 10 ], "texture": "#sides" },
                 "up":    { "uv": [ 6, 0, 10, 1 ], "texture": "#sides" },
                 "down":  { "uv": [ 6, 15, 10, 16 ], "texture": "#sides" }
+            }
+        },
+        {
+            "from": [ 6, 6, 4 ],
+            "to": [ 10, 10, 5 ],
+            "faces": {
+                "north": { "uv": [ 6, 6, 10, 10 ], "texture": "#sidesStatus" },
+                "east":  { "uv": [ 0, 6, 1, 10 ], "texture": "#sidesStatus" },
+                "south": { "uv": [ 6, 6, 10, 10 ], "texture": "#sidesStatus" },
+                "west":  { "uv": [ 15, 6, 16, 10 ], "texture": "#sidesStatus" },
+                "up":    { "uv": [ 6, 0, 10, 1 ], "texture": "#sidesStatus" },
+                "down":  { "uv": [ 6, 15, 10, 16 ], "texture": "#sidesStatus" }
             }
         }
     ]
