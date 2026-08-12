@@ -28,3 +28,7 @@ gradle-app.setting
 # Design source files (not committed)
 *.psb
 *.psd
+
+# Local-only files (kept locally, not uploaded)
+MCMOD_CN.md
+time_bus_base.blockbench.bak
