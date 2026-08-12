@@ -127,35 +127,12 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             return EnumActionResult.PASS;
         }
         if (worldIn.isRemote) {
-            final ItemStack held = player.getHeldItem(hand);
-            // Cheap precheck from the item NBT: never show the burst when the
-            // wand cannot actually pay (the server stays authoritative and
-            // reports the real failure via a status message).
-            final boolean enough = hasEnoughResources(held);
-            // Client side: if we hit an ME Import/Export Bus, intercept so the
-            // bus GUI does not open (server will run the batch transfer).
-            final IPart hitPart = findImportExportBus(worldIn, pos, facing, hitX, hitY, hitZ);
-            if (hitPart != null) {
-                // Visual feedback for the batch transfer: same outward burst
-                // as block acceleration (server can't spawn the 7-arg particles).
-                if (enough && TimeBusFluids.TIME_FLUID != null) {
-                    spawnBurstParticles(worldIn, pos, getWandSpeed(held));
-                }
-                return EnumActionResult.SUCCESS;
-            }
-            // Only show the burst for targets the server will actually
-            // accelerate: the server re-checks the same predicate before
-            // charging, so the client must not animate a doomed click.
-            if (!AccelerateHelper.canAccelerate(worldIn, pos)) {
-                return EnumActionResult.FAIL;
-            }
-            // Otherwise render the particle burst locally. The 7-arg
-            // World.spawnParticle overload only draws on the client, so the
-            // burst must be spawned here, not from the server branch.
-            if (enough && TimeBusFluids.TIME_FLUID != null) {
-                spawnBurstParticles(worldIn, pos, getWandSpeed(held));
-            }
-            return enough ? EnumActionResult.SUCCESS : EnumActionResult.FAIL;
+            // 服务端权威:直接放行(1.12.2 Forge 的 processRightClickBlock 对
+            // onItemUseFirst 返回非 PASS 的结果都会发包),由服务端执行并负责
+            // 状态消息与粒子广播。客户端不做本地预检,避免客户端 cfg 与服务端
+            // 不一致时误判(MM/Mek 开关仅在服务端生效)。返回 SUCCESS 同时拦截
+            // 方块 GUI(总线 GUI、熔炉 GUI 等),与"潜行 = 加速"语义一致。
+            return EnumActionResult.SUCCESS;
         }
         final ItemStack stack = player.getHeldItem(hand);
         if (TimeBusFluids.TIME_FLUID == null) {
@@ -187,6 +164,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             }
             ModularMachineryAccelerator.applyWandToActiveRecipes(targetTE,
                     ModularMachineryAccelerator.SOURCE_WAND_PREFIX + player.getUniqueID(), getWandMmSpeed(stack));
+            spawnBurstParticles(worldIn, pos, getWandMmSpeed(stack));
             return EnumActionResult.SUCCESS;
         }
         // TODO(Mek): 魔杖对 Mek 机器目前只有约 0.5 秒的加速效果（活跃表 10 tick
@@ -213,38 +191,15 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             return EnumActionResult.FAIL;
         }
 
-        // Accelerate the target block once. (Particles are rendered by the
-        // client branch of onItemUse.) The source key is per player so different
-        // players' wands stack on the same machine instead of overwriting each
-        // other (MM modifier key collision).
-        AccelerateHelper.accelerateOnce(worldIn, pos, getWandSpeed(stack),
+        // Accelerate the target block once. The source key is per player so
+        // different players' wands stack on the same machine instead of
+        // overwriting each other (MM modifier key collision). The particle burst
+        // is broadcast by the server so all nearby players see it.
+        final int speed = getWandSpeed(stack);
+        AccelerateHelper.accelerateOnce(worldIn, pos, speed,
                 ModularMachineryAccelerator.SOURCE_WAND_PREFIX + player.getUniqueID());
+        spawnBurstParticles(worldIn, pos, speed);
         return EnumActionResult.SUCCESS;
-    }
-    /**
-     * Cheap client-side precheck that the wand holds enough AE power and Time
-     * Fluid. Reads only the item NBT (same path the tooltip uses), so it is
-     * safe to call on the client; the server remains authoritative.
-     */
-    private boolean hasEnoughResources(final ItemStack stack) {
-        if (TimeBusFluids.TIME_FLUID == null) {
-            return false;
-        }
-        final double energyNeed = TimeBusConfig.Wand.wandEnergyCost;
-        if (this.extractAEPower(stack, energyNeed, Actionable.SIMULATE) < energyNeed) {
-            return false;
-        }
-        final ICellInventoryHandler<IAEFluidStack> cell = AEApi.instance()
-                .registries().cell()
-                .getCellInventory(stack, null,
-                        AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class));
-        if (cell == null) {
-            return false;
-        }
-        final int fluidNeed = TimeBusConfig.Wand.wandFluidCost;
-        final IAEFluidStack request = AEFluidStack.fromFluidStack(new FluidStack(TimeBusFluids.TIME_FLUID, fluidNeed));
-        final IAEFluidStack taken = cell.extractItems(request, Actionable.SIMULATE, null);
-        return taken != null && taken.getStackSize() >= fluidNeed;
     }
 
     /** Report a failed use to the player (synced to the client by vanilla). */
@@ -406,6 +361,7 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             return EnumActionResult.FAIL;
         }
         commitCosts(stack);
+        spawnBurstParticles(world, pos, getWandSpeed(stack));
 
         // Batch: run the remaining bus work calls (the probe already did one).
         // Clamp as a defensive backstop: the config range is already capped, but
@@ -422,8 +378,23 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         }
         return EnumActionResult.SUCCESS;
     }
-    /** END_ROD (+ occasional PORTAL) particles bursting outward from the block faces. */
+    /**
+     * 六面外冲的粒子爆发,由服务端广播(1.12.2 的 {@code WorldServer} 覆写了
+     * 带 count 的 {@code spawnParticle} 重载,向 64 格内玩家发送
+     * SPacketParticles,多人可见)。只在服务端成功执行后调用;客户端不再本地
+     * 绘制,避免双份粒子与"其他玩家看不见"的问题。
+     *
+     * <p>注意服务端重载签名与客户端不同:位置后是 count、xOffset/yOffset/
+     * zOffset(散布范围)与 particleSpeed(粒子速度);客户端按 offset 高斯
+     * 散布位置、按 particleSpeed 随机方向出速度。逐粒子 count=1 调用把
+     * 位置固定在方块面上,速度大小保留原外冲力度,方向由客户端随机化——
+     * 视觉上是标准的向外爆散;每次点击最多 24 个包,带宽可忽略。
+     */
     private void spawnBurstParticles(final net.minecraft.world.World world, final BlockPos pos, final int speed) {
+        if (!(world instanceof net.minecraft.world.WorldServer)) {
+            return;
+        }
+        final net.minecraft.world.WorldServer server = (net.minecraft.world.WorldServer) world;
         final double cx = pos.getX() + 0.5;
         final double cy = pos.getY() + 0.5;
         final double cz = pos.getZ() + 0.5;
@@ -434,26 +405,22 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             // clearly visible around the block surface.
             final int face = world.rand.nextInt(6);
             double px = cx, py = cy, pz = cz;
-            double nx = 0, ny = 0, nz = 0;
             final double jx = (world.rand.nextDouble() - 0.5) * 0.8;
             final double jy = (world.rand.nextDouble() - 0.5) * 0.8;
             final double jz = (world.rand.nextDouble() - 0.5) * 0.8;
             switch (face) {
-                case 0: px = pos.getX() + 1.0; py = cy + jy; pz = cz + jz; nx = 1; break;
-                case 1: px = pos.getX();       py = cy + jy; pz = cz + jz; nx = -1; break;
-                case 2: py = pos.getY() + 1.0; px = cx + jx; pz = cz + jz; ny = 1; break;
-                case 3: py = pos.getY();       px = cx + jx; pz = cz + jz; ny = -1; break;
-                case 4: pz = pos.getZ() + 1.0; px = cx + jx; py = cy + jy; nz = 1; break;
-                default: pz = pos.getZ();      px = cx + jx; py = cy + jy; nz = -1; break;
+                case 0: px = pos.getX() + 1.0; py = cy + jy; pz = cz + jz; break;
+                case 1: px = pos.getX();       py = cy + jy; pz = cz + jz; break;
+                case 2: py = pos.getY() + 1.0; px = cx + jx; pz = cz + jz; break;
+                case 3: py = pos.getY();       px = cx + jx; pz = cz + jz; break;
+                case 4: pz = pos.getZ() + 1.0; px = cx + jx; py = cy + jy; break;
+                default: pz = pos.getZ();      px = cx + jx; py = cy + jy; break;
             }
             final double f = 0.14 + world.rand.nextDouble() * 0.18;
-            final double vx = nx * f + (world.rand.nextDouble() - 0.5) * 0.2;
-            final double vy = ny * f + (world.rand.nextDouble() - 0.5) * 0.2;
-            final double vz = nz * f + (world.rand.nextDouble() - 0.5) * 0.2;
-            world.spawnParticle(EnumParticleTypes.END_ROD, px, py, pz, vx, vy, vz);
+            server.spawnParticle(EnumParticleTypes.END_ROD, false, px, py, pz, 1, 0.0, 0.0, 0.0, f);
             // Sprinkle in a few PORTAL particles for a stronger time effect.
             if (i % 8 == 0) {
-                world.spawnParticle(EnumParticleTypes.PORTAL, px, py, pz, vx * 1.5, vy * 1.5, vz * 1.5);
+                server.spawnParticle(EnumParticleTypes.PORTAL, false, px, py, pz, 1, 0.0, 0.0, 0.0, f * 1.5);
             }
         }
     }
@@ -582,8 +549,11 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             final ICellInventory<IAEFluidStack> inv = cell.getCellInv();
             // AE2EL fluid cells store 8000 mB per byte (IStorageChannel.getUnitsPerByte);
             // the old hardcoded *1000 showed a capacity 8x too small.
-            final long capacity = inv == null ? 0 : inv.getTotalBytes()
-                    * AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class).getUnitsPerByte();
+            // (int) clamp: wandBytes 配置上限 1e9, 1e9 * 8000 远超 int 范围,强转
+            // 会溢出成负容量;容量只用于显示,封顶到 Integer.MAX_VALUE 即可。
+            final long capacity = inv == null ? 0 : Math.min(inv.getTotalBytes()
+                    * AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class).getUnitsPerByte(),
+                    Integer.MAX_VALUE);
             FluidStack contents = null;
             final IAEFluidStack first = cell.getAvailableItems(
                     AEApi.instance().storage().getStorageChannel(IFluidStorageChannel.class).createList()).getFirstItem();

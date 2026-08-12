@@ -7,6 +7,8 @@ import appeng.api.parts.IPartHost;
 import appeng.api.parts.SelectedPart;
 import appeng.api.util.AEPartLocation;
 import appeng.parts.BusCollisionHelper;
+import appeng.parts.automation.PartExportBus;
+import appeng.parts.automation.PartImportBus;
 import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.item.ItemTimeWand;
 import net.minecraft.client.Minecraft;
@@ -66,8 +68,8 @@ public class WandPartPreviewRenderer {
     private static final float ALPHA_OUTSIDE = 0.6F;
     /** 内部（穿透方块）pass 的透明度。 */
     private static final float ALPHA_INSIDE = 0.2F;
-    /** 自发射线距离（创造模式方块交互距离）。 */
-    private static final double RAY_DISTANCE = 5.5D;
+    /** 自发射线距离(生存模式方块交互距离,4.5 格)。 */
+    private static final double RAY_DISTANCE = 4.5D;
 
     @SubscribeEvent
     public static void onRenderWorldLast(RenderWorldLastEvent event) {
@@ -80,6 +82,10 @@ public class WandPartPreviewRenderer {
         // 只有手持时间杖才显示加速预览。
         ItemStack stack = player.getHeldItemMainhand();
         if (!(stack.getItem() instanceof ItemTimeWand)) {
+            return;
+        }
+        // 潜行右键才是加速交互;非潜行时右键走默认行为(打开 GUI 等),不显示预览。
+        if (!player.isSneaking()) {
             return;
         }
 
@@ -117,7 +123,9 @@ public class WandPartPreviewRenderer {
             }
         }
 
-        if (part == null) {
+        // 魔杖只对导入/导出总线有互动（批量传输），其他 part（ME 接口/终端/
+        // 面板/时间总线部件等）点击后什么都不做，不显示预览避免误导。
+        if (!(part instanceof PartExportBus || part instanceof PartImportBus)) {
             return;
         }
 

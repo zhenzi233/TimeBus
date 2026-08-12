@@ -23,6 +23,24 @@ import net.minecraft.world.World;
  */
 public final class AccelerateHelper {
 
+    /**
+     * 单次加速调用的 tile update 次数上限。
+     *
+     * <p>时间总线有每 tick 工作预算（maxCallsPerTick + 跨 tick 结转），但魔杖
+     * 是主线程一次性执行：满配倍率（512x）会一次连调 511 次 update()，极端
+     * 配置更无上界。此上限让单次调用最多推进 512 tick 进度（约 25.6 秒），
+     * 效果依然显著但不会拖垮服务端 tick。总线每 tick 传入量（≤ speed-1 ≤ 31）
+     * 远低于上限，不受影响。
+     */
+    private static final int MAX_TILE_UPDATES_PER_CALL = 512;
+
+    /**
+     * 单次加速调用的 Block.randomTick 次数上限（原因同上；总线每 tick 传入量
+     * ≤ 32x20 = 640，远低于上限）。512x 满配点击作物 = 512x20 = 10240 次,
+     * 封顶到 2048 次仍约合数秒作物进度。
+     */
+    private static final int MAX_RANDOM_TICKS_PER_CALL = 2048;
+
     private AccelerateHelper() {
     }
 
@@ -140,8 +158,11 @@ public final class AccelerateHelper {
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: scheduleBlockUpdate failed at {}: {}", pos, e.toString());
         }
-        runTileUpdates(world, pos, Math.max(0, speed - 1), speed, sourceKey);
-        runRandomTicks(world, pos, state, block, speed * TimeBusConfig.Bus.randomTickCallsPerSpeed);
+        // 单次调用的工作量封顶（见 MAX_*_PER_CALL 注释；随机刻次数先按 long 计算
+        // 再封顶，避免极端配置下 speed * perSpeed 的 int 溢出退化为 1 次）。
+        runTileUpdates(world, pos, Math.max(0, Math.min(speed - 1, MAX_TILE_UPDATES_PER_CALL)), speed, sourceKey);
+        runRandomTicks(world, pos, state, block,
+                (int) Math.min((long) speed * TimeBusConfig.Bus.randomTickCallsPerSpeed, MAX_RANDOM_TICKS_PER_CALL));
     }
 
     /**
@@ -157,6 +178,8 @@ public final class AccelerateHelper {
         if (n <= 0 || world == null || target == null) {
             return 0;
         }
+        // 防御性封顶：任何调用方（总线/魔杖）单次都不能超限。
+        final int calls = Math.min(n, MAX_TILE_UPDATES_PER_CALL);
         final TileEntity targetTE = world.getTileEntity(target);
         final TileKind kind = getTileKind(targetTE);
 
@@ -164,7 +187,7 @@ public final class AccelerateHelper {
             case CHARGER: {
                 final appeng.tile.misc.TileCharger charger = (appeng.tile.misc.TileCharger) targetTE;
                 int ran = 0;
-                for (int i = 0; i < n; i++) {
+                for (int i = 0; i < calls; i++) {
                     try {
                         // doWork() is private in TileCharger; the mixin invoker
                         // exposes it directly - no reflection dispatch overhead
@@ -254,7 +277,7 @@ public final class AccelerateHelper {
             case ITICKABLE: {
                 final net.minecraft.util.ITickable tickable = (net.minecraft.util.ITickable) targetTE;
                 int ran = 0;
-                for (int i = 0; i < n; i++) {
+                for (int i = 0; i < calls; i++) {
                     try {
                         tickable.update();
                         ran++;
@@ -286,9 +309,11 @@ public final class AccelerateHelper {
         if (n <= 0 || world == null || target == null || !targetBlock.getTickRandomly()) {
             return 0;
         }
+        // 防御性封顶（见 MAX_RANDOM_TICKS_PER_CALL 注释）。
+        final int calls = Math.min(n, MAX_RANDOM_TICKS_PER_CALL);
         int ran = 0;
         // Re-check the block state occasionally instead of every call.
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < calls; i++) {
             if (ran % 20 == 0 && world.getBlockState(target) != targetState) {
                 break;
             }

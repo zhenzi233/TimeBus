@@ -56,7 +56,13 @@ public final class ActiveSpeedTable<K> {
             return null;
         }
         final AccelState state = table.get(key);
-        if (state == null || nowTick - state.tick > freshWindow) {
+        if (state == null) {
+            return null;
+        }
+        if (nowTick - state.tick > freshWindow) {
+            // 过期即失效,顺手删除:避免仅靠弱引用回收的过期条目累积
+            // (魔杖一次性点击等不再持续登记的加速源)。
+            table.remove(key);
             return null;
         }
         return state.speed > 1 ? state.speed : null;

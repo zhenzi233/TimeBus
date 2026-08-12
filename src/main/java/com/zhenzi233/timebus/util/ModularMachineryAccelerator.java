@@ -680,9 +680,18 @@ public final class ModularMachineryAccelerator {
         if (!available) {
             return;
         }
-        final List<World> worlds;
+        final List<World> worlds = new ArrayList<>();
         synchronized (INJECTED) {
-            worlds = new ArrayList<>(INJECTED.keySet());
+            worlds.addAll(INJECTED.keySet());
+        }
+        // 纯魔杖注入(无总线)的世界只登记在 SEMI_INJECTED,也要覆盖(关服时
+        // 魔杖的半永久 modifier 同样不能残留进存档;日常由世界卸载事件兜底)。
+        synchronized (SEMI_INJECTED) {
+            for (final World world : SEMI_INJECTED.keySet()) {
+                if (!worlds.contains(world)) {
+                    worlds.add(world);
+                }
+            }
         }
         for (final World world : worlds) {
             restoreAllForWorld(world);
