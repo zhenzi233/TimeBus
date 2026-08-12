@@ -7,6 +7,7 @@ import com.zhenzi233.timebus.item.ItemTimeInscriberTemplate;
 import com.zhenzi233.timebus.item.ItemTimeProcessor;
 import com.zhenzi233.timebus.item.ItemTimeWand;
 import com.zhenzi233.timebus.part.ItemTimeBus;
+import com.zhenzi233.timebus.part.ItemTimeSlowBus;
 import com.zhenzi233.timebus.config.TimeBusConfig;
 import net.minecraft.client.renderer.block.model.ModelResourceLocation;
 import net.minecraft.item.Item;
@@ -40,6 +41,9 @@ public class ClientProxy implements IProxy {
         ItemTimeProcessor.ITEM = new ItemTimeProcessor();
         GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemTimeProcessor.ITEM);
 
+        ItemTimeSlowBus.ITEM = new ItemTimeSlowBus();
+        GameRegistry.findRegistry(net.minecraft.item.Item.class).register(ItemTimeSlowBus.ITEM);
+
         // Register item models in preInit. In 1.12.2 the model registry is baked before
         // init, so models must be registered here or the items render black/purple.
         registerItemModel(ItemTimeBus.ITEM, 0, "time_bus");
@@ -49,6 +53,7 @@ public class ClientProxy implements IProxy {
         registerItemModel(ItemTimeInscriberTemplate.ITEM, 0, "time_inscriber_template");
         registerItemModel(ItemTimeCircuitBoard.ITEM, 0, "time_circuit_board");
         registerItemModel(ItemTimeProcessor.ITEM, 0, "time_processor");
+        registerItemModel(ItemTimeSlowBus.ITEM, 0, "time_slow_bus");
         // The generator's ItemBlock shares the block's registry name.
         Item generatorItem = Item.getByNameOrId("timebus:time_generator");
         if (generatorItem != null) {

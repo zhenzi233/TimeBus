@@ -59,6 +59,7 @@ config.timebus.mek.mekGeneratorAccelerationEnabled=发电机加速
 config.timebus.mek.mekAccelerationEnabled.comment=开启后时间总线加速 Mekanism(CE-Unofficial) 机器：每服务器 tick 重复运行配方刻多次（每次额外推进 1 刻并消耗 1 刻能量，单次配方总耗电不变）。需要 Mekanism-CE-Unofficial；缺失或版本不匹配时静默跳过。默认 false
 config.timebus.mek.mekGeneratorAccelerationEnabled.comment=开启后时间总线/时间杖加速 Mek 发电机（风力/燃气/生物/太阳能/先进太阳能/热力/大型多模块）：加速时每 tick 多产 N 倍电（N=总线速度倍率）且不额外消耗燃料——纯免费产电，刻意不平衡。绕过 Mek 自身的受限 tick 防加速设计。需要 Mekanism-CE-Unofficial；缺失或版本不匹配时静默跳过。默认 true
 item.timebus.time_bus.name=时间总线
+item.timebus.time_slow_bus.name=时间减速总线
 item.timebus.debug_wand.name=调试棒
 item.timebus.time_wand.name=时间杖
 item.timebus.machine_parallel_card.name=机器并行卡
@@ -72,6 +73,9 @@ tile.timebus.time_bus.name=时间总线
 tile.timebus.time_generator.name=时间流体发生器
 fluid.time_fluid=时间流体
 gui.timebus.title=ME 时间总线
+gui.timebus.slow_title=ME 时间减速总线
+gui.timebus.slow_rate=减速: 每 %1$d tick 执行一次（%2$d张卡）
+gui.timebus.slow_range=范围: %1$d 格
 gui.timebus.speed=速度: %1$d倍（%2$d张卡）
 gui.timebus.power=耗电: %1$.1f AE/t
 gui.timebus.budget=预算: %1$d/%2$d 次调用

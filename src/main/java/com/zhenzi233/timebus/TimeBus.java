@@ -69,6 +69,14 @@ public class TimeBus {
                         ctx.world, ctx.pos.getX(), ctx.pos.getY(), ctx.pos.getZ());
             }
         });
+        // Register external GUI for Time Slow Bus
+        GuiWrapper.INSTANCE.registerExternalGuiHandler(com.zhenzi233.timebus.client.gui.TimeSlowBusGui.ID, new GuiWrapper.Opener() {
+            @Override
+            public <T extends GuiWrapper.IExternalGui> void open(T obj, GuiWrapper.GuiContext ctx) {
+                ctx.player.openGui(TimeBus.instance, GuiHandler.GUI_TIME_SLOW_BUS,
+                        ctx.world, ctx.pos.getX(), ctx.pos.getY(), ctx.pos.getZ());
+            }
+        });
         NetworkRegistry.INSTANCE.registerGuiHandler(this, new GuiHandler());
 
         // Register Time Fluid (must run before proxy.preInit)
@@ -93,12 +101,22 @@ public class TimeBus {
         // Register upgrades for the Time Wand item (Speed Cards only).
         Upgrades.SPEED.registerItem(makeItemDef("time_wand", com.zhenzi233.timebus.item.ItemTimeWand.ITEM), 4);
 
+        // Register upgrades for the Time Slow Bus item.
+        IItemDefinition slowBusDef = makeItemDef("time_slow_bus", com.zhenzi233.timebus.part.ItemTimeSlowBus.ITEM);
+        Upgrades.SPEED.registerItem(slowBusDef, 4);
+        Upgrades.CAPACITY.registerItem(slowBusDef, 3);
+        Upgrades.REDSTONE.registerItem(slowBusDef, 1);
+
         // Register AE2 part models
         AEApi.instance().registries().partModels().registerModels(
             new ResourceLocation(MOD_ID, "part/time_bus_base"),
             new ResourceLocation(MOD_ID, "part/time_bus_off"),
             new ResourceLocation(MOD_ID, "part/time_bus_on"),
-            new ResourceLocation(MOD_ID, "part/time_bus_has_channel")
+            new ResourceLocation(MOD_ID, "part/time_bus_has_channel"),
+            new ResourceLocation(MOD_ID, "part/time_slow_bus_base"),
+            new ResourceLocation(MOD_ID, "part/time_slow_bus_off"),
+            new ResourceLocation(MOD_ID, "part/time_slow_bus_on"),
+            new ResourceLocation(MOD_ID, "part/time_slow_bus_has_channel")
         );
     }
 

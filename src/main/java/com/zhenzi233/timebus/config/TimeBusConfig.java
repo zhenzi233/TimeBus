@@ -35,6 +35,8 @@ public class TimeBusConfig {
     private static final int[] DEFAULT_SPEED_MULTIPLIERS = {2, 4, 8, 16, 32};
     /** 时间杖默认倍率：一次性点击加速,起步更高(0 卡 = 32x,满配 = 512x)。 */
     private static final int[] DEFAULT_WAND_SPEED_MULTIPLIERS = {32, 64, 128, 256, 512};
+    /** 时间减速总线默认档位：每 N tick 才执行一次 update(0 卡 = 半速,满配 = 1/32 速)。 */
+    private static final int[] DEFAULT_SLOWDOWN_MULTIPLIERS = {2, 4, 8, 16, 32};
     private static final int[] DEFAULT_CAPACITY_WIDTHS = {1, 3, 9, 15};
 
     /** 时间总线（Time Bus，ME 线缆部件）配置。 */
@@ -411,6 +413,7 @@ public class TimeBusConfig {
         Bus.cachedSpeedMultipliers = null;
         Bus.cachedCapacityWidths = null;
         Wand.cachedWandSpeedMultipliers = null;
+        SlowBus.cachedSlowdownMultipliers = null;
     }
 
     /**
@@ -469,6 +472,46 @@ public class TimeBusConfig {
         @Comment("每次合成产出的时间压印模板数量。默认 1")
         @RangeInt(min = 1, max = 64)
         public static int outputCount = 1;
+    }
+
+    /** 时间减速总线配置（让正面 ITickable 方块每 N tick 才执行一次 update）。 */
+    @Config(modid = TimeBus.MOD_ID, category = "slowBus")
+    @Config.LangKey("config.timebus.category.slowBus")
+    public static class SlowBus {
+
+        @Name("Slowdown Multipliers")
+        @LangKey("config.timebus.slowBus.slowdownMultipliers")
+        @Comment({
+            "Per-card slowdown levels, comma-separated.",
+            "Nth value = every N ticks the targeted block tick runs once when N-1 cards are installed.",
+            "Example: 2,4,8,16,32 -> 0 cards=1/2 speed, 1 card=1/4 speed, 2 cards=1/8 speed, 3 cards=1/16 speed, 4 cards=1/32 speed"
+        })
+        public static String slowdownMultipliers = join(DEFAULT_SLOWDOWN_MULTIPLIERS);
+
+        @Name("Idle Power Draw (AE/t)")
+        @LangKey("config.timebus.slowBus.idlePower")
+        @Comment("Power drawn per tick when idle (no slowdown happening). Default: 1.0")
+        @RangeDouble(min = 0.0, max = 1000.0)
+        public static double idlePower = 1.0;
+
+        @Name("Power Cost per Slowdown Unit")
+        @LangKey("config.timebus.slowBus.powerPerSpeed")
+        @Comment({
+            "Power cost multiplier. Total cost per tick = max(idlePower, (slowdownLevel + 2 * upgradeCount) * powerPerSpeed).",
+            "Default: 0.5"
+        })
+        @RangeDouble(min = 0.0, max = 100.0)
+        public static double powerPerSpeed = 0.5;
+
+        // int[] 缓存字段不会被 Forge 当配置项（不支持数组类型，自动跳过）。
+        static int[] cachedSlowdownMultipliers = null;
+
+        public static int[] getSlowdownMultipliers() {
+            if (cachedSlowdownMultipliers == null) {
+                cachedSlowdownMultipliers = parseList(slowdownMultipliers, DEFAULT_SLOWDOWN_MULTIPLIERS);
+            }
+            return cachedSlowdownMultipliers;
+        }
     }
 
     /** ConfigManager.getConfiguration 是包私有方法，通过反射获取当前 cfg 实例。 */

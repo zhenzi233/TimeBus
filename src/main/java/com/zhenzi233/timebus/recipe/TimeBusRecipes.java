@@ -126,5 +126,11 @@ public final class TimeBusRecipes {
                 new ItemStack(ItemMachineParallelCard.ITEM),
                 net.minecraft.item.crafting.Ingredient.fromStacks(advCard),
                 net.minecraft.item.crafting.Ingredient.fromStacks(processor));
+
+        // Time Slow Bus: Clock (center) + Time Processors + Matter Ball + Redstone
+        GameRegistry.addShapedRecipe(new ResourceLocation(TimeBus.MOD_ID, "time_slow_bus"), null,
+                new ItemStack(com.zhenzi233.timebus.part.ItemTimeSlowBus.ITEM),
+                " m ", "tct", " r ",
+                'm', matterBall, 't', processor, 'c', new ItemStack(Items.CLOCK), 'r', new ItemStack(Items.REDSTONE));
     }
 }

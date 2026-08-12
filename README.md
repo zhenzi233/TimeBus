@@ -36,6 +36,20 @@ A burst on one block = 1 scheduled block update + a tile-entity phase + `speed x
 
 So the `32x` rating is an approximation: a 32x bus advances ITickable machines ~31 ticks, grid machines ~31 x 32 = 992 ticks of progress, and IO Ports ~31 batches per burst.
 
+### Time Slow Bus (ME cable part)
+
+The mirror image of the Time Bus - it makes time **run slower** for a row of blocks in front of it, by running their `ITickable.update()` only once every N ticks:
+
+- **Frequency-based slowdown**: targeted blocks run their update once every N ticks (N = speed-card level, default `2,4,8,16,32` -> half speed, quarter speed, ... 1/32 speed). Vanilla machines (furnaces, brewing stands, hoppers), most regular mod machines, and MM/Mek controllers (restricted-tick machines) are all covered; fuel and progress slow down together, total output stays constant - symmetric to acceleration.
+- **Speed upgrade cards**: up to 4, each doubling the level (once every N ticks).
+- **Capacity upgrade cards**: up to 3, widen the slowdown range (shares the `1,3,9,15` config with the Time Bus).
+- **Redstone control**: high / low / pulse mode (needs 1 redstone card); when the condition is unmet or power is lost, registration stops and blocks recover normal speed within 10 ticks.
+- **Mutual exclusion with acceleration**: while a block is slowed down, Time Bus / Time Wand acceleration yields (slowdown wins).
+- **Power**: idle + per-slowdown-unit AE drawn from the ME network.
+- **GUI**: shows the current slowdown level, range and power draw.
+- **Crafting**: Clock + 2 Time Processors + Matter Ball + Redstone.
+- Known boundary: AE2 grid-ticked machines (Inscriber / Molecular Assembler / IO Port, driven by AE2's grid tick) are not covered.
+
 ### Time Fluid
 
 - Bundled fluid **`time_fluid`**, storable/extractable through the ME network.
@@ -117,6 +131,14 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | `Minimum Fluid` | `1000` | Min mB in the ME network before operating |
 | `Max Calls per Tick` | `128` | Work budget (acceleration calls per server tick) |
 | `Random Tick Calls per Speed Unit` | `20` | Block.randomTick calls per speed unit on randomly-ticking blocks (at 32x = 640 calls/block; lower it if random-tick acceleration starves the budget) |
+
+### Time Slow Bus
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `Slowdown Multipliers` | `2,4,8,16,32` | Per-card slowdown levels, comma-separated: the Nth value = with N-1 cards the block tick runs once every that many ticks (0 cards = half speed, 4 cards = 1/32 speed) |
+| `Idle Power Draw` | `1.0` | AE/t drawn while idle |
+| `Power Cost per Slowdown Unit` | `0.5` | AE power multiplier per slowdown level |
 
 ### Time Fluid Generator
 

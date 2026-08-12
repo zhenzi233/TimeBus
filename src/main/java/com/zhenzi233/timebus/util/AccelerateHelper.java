@@ -178,6 +178,11 @@ public final class AccelerateHelper {
         if (n <= 0 || world == null || target == null) {
             return 0;
         }
+        // 与减速互斥：目标方块正被时间减速总线减速时，加速让路（减速优先）。
+        // 否则同一 tick 里减速跳过 update 与加速连拍 update 会互相抵消。
+        if (TileSlowdownTable.isSlowed(world, target)) {
+            return 0;
+        }
         // 防御性封顶：任何调用方（总线/魔杖）单次都不能超限。
         final int calls = Math.min(n, MAX_TILE_UPDATES_PER_CALL);
         final TileEntity targetTE = world.getTileEntity(target);
