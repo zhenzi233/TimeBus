@@ -2,6 +2,26 @@
 
 > 说明：本仓库自 v1.0.4 起维护 CHANGELOG；更早版本（v1.0.0–v1.0.3）为开发期版本，未收录变更记录。
 
+## v1.0.15 (beta)
+
+- Feature: **时间减速总线（Time Slow Bus）**——新的 AE2 线缆部件，让时间"变慢"：
+  正面一排 ITickable 方块每 N tick 才执行一次 update（速度卡档位默认
+  `2,4,8,16,32` → 半速~1/32 速），覆盖熔炉/酿造台/漏斗等原版机器、普通
+  模组机器与 MM/Mek 控制器；燃料与进度同步降频，总产出守恒；与时间总线/
+  时间杖的加速互斥（减速优先）。新增 `slowBus` 配置组与专属 GUI
+- Fix: 时间减速总线 GUI 打开崩溃——补注册 `FUZZY_MODE` 设置
+  （ContainerUpgradeable 读取缺失即抛异常）
+- Fix: MM 配方时长加速封顶 32x（`MAX_MM_EFFECTIVE_SPEED`）——多台总线/
+  魔杖叠加或配置调大时，配方总时长被 `Math.round` 取整为 0/1 tick 导致
+  "完成但不出货"、进度异常；能耗 modifier 与时长共用同一有效倍率，单次
+  配方总耗电守恒不破坏
+- Fix: `MixinWorldTileUpdate` 改为**早期 mixin**（最小 coremod +
+  `timebus.early.mixin.json`），修复 World 核心类在 MOD 阶段已加载导致的
+  MixinTargetAlreadyLoadedException / Re-entrance 启动崩溃
+- Change: 时间减速总线外观改用 AE2 输入总线（import bus）原版结构——几何
+  （主体 Z=0-2 + 三均匀阶梯）、纹理、物品模型三处全部同步；合成配方改为
+  与时间总线相同布局，中间用 AE 破坏核心（Annihilation Core）
+
 ## v1.0.14
 
 - Feature: **爆炸合成**——将奇点与铁锭/铁块（物品实体，丢在地上）置于爆炸波及范围，
