@@ -1,9 +1,9 @@
 {
     "textures": {
-        "sides": "timebus:parts/export_bus_sides",
+        "sides": "timebus:parts/import_bus_sides",
         "sidesStatus": "timebus:parts/monitor_sides_status",
         "back": "timebus:parts/monitor_back",
-        "front": "timebus:items/part/export_bus",
+        "front": "timebus:items/part/import_bus",
         "particle": "timebus:parts/monitor_back"
     },
     "elements": [
