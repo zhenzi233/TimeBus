@@ -89,6 +89,8 @@ public final class TimeBusRecipes {
                 .maybeStack(1).orElse(ItemStack.EMPTY);
         final ItemStack formationCore = AEApi.instance().definitions().materials().formationCore()
                 .maybeStack(1).orElse(ItemStack.EMPTY);
+        final ItemStack annihilationCore = AEApi.instance().definitions().materials().annihilationCore()
+                .maybeStack(1).orElse(ItemStack.EMPTY);
 
         GameRegistry.addShapedRecipe(new ResourceLocation(TimeBus.MOD_ID, "time_bus"), null,
                 new ItemStack(ItemTimeBus.ITEM),
@@ -127,10 +129,10 @@ public final class TimeBusRecipes {
                 net.minecraft.item.crafting.Ingredient.fromStacks(advCard),
                 net.minecraft.item.crafting.Ingredient.fromStacks(processor));
 
-        // Time Slow Bus: Clock (center) + Time Processors + Matter Ball + Redstone
+        // Time Slow Bus: 与时间总线相同布局,中间用 AE 破坏核心(Annihilation Core)。
         GameRegistry.addShapedRecipe(new ResourceLocation(TimeBus.MOD_ID, "time_slow_bus"), null,
                 new ItemStack(com.zhenzi233.timebus.part.ItemTimeSlowBus.ITEM),
-                " m ", "tct", " r ",
-                'm', matterBall, 't', processor, 'c', new ItemStack(Items.CLOCK), 'r', new ItemStack(Items.REDSTONE));
+                " t ", "mcm", " p ",
+                't', processor, 'm', matterBall, 'c', annihilationCore, 'p', new ItemStack(Blocks.PISTON));
     }
 }

@@ -47,7 +47,7 @@ The mirror image of the Time Bus - it makes time **run slower** for a row of blo
 - **Mutual exclusion with acceleration**: while a block is slowed down, Time Bus / Time Wand acceleration yields (slowdown wins).
 - **Power**: idle + per-slowdown-unit AE drawn from the ME network.
 - **GUI**: shows the current slowdown level, range and power draw.
-- **Crafting**: Clock + 2 Time Processors + Matter Ball + Redstone.
+- **Crafting**: same layout as the Time Bus (2 Time Processors + Matter Ball + Piston), with an AE Annihilation Core in the center.
 - Known boundary: AE2 grid-ticked machines (Inscriber / Molecular Assembler / IO Port, driven by AE2's grid tick) are not covered.
 
 ### Time Fluid
