@@ -158,6 +158,17 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 > one extra tick itself, so it accelerates at N+1 with slightly higher per-tick
 > energy; accepted behavior.
 
+### Explosion Synthesis
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `Enabled` | `true` | Whether to enable explosion synthesis: a Singularity and an Iron Ingot/Block (item entities, dropped on the ground) caught in an explosion are transformed into Time Inscriber Templates |
+| `Singularity Cost` | `1` | Singularities consumed per craft |
+| `Iron Cost` | `1` | Iron consumed per craft (iron ingot or block, ore dict `ingotIron`/`blockIron`) |
+| `Output Count` | `1` | Time Inscriber Templates produced per craft |
+
+Usage: drop a Singularity and an Iron Ingot (or Iron Block) **on the ground** (item entities), then detonate any explosion (TNT, creeper, ...) near them - they are transformed into Time Inscriber Templates when the explosion resolves. The JEI page of the Time Inscriber Template shows this crafting method as text info (same style as AE2).
+
 ## Usage
 
 1. Place the Time Bus on any side of an AE2 cable/bus network.

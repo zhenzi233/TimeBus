@@ -70,3 +70,5 @@ msg.timebus.bus_idle=Not a valid bus
 msg.timebus.no_active_recipe=The machine has no running recipe
 msg.timebus.cannot_accelerate=This block cannot be accelerated
 msg.timebus.mm_acceleration_disabled=MM acceleration is disabled - enable "MM Acceleration Enabled" in the config
+
+info.timebus.explosion_synthesis=Explosion synthesis: drop a Singularity and an Iron Ingot (or Iron Block) on the ground, then detonate an explosion nearby to transform them into a Time Inscriber Template.

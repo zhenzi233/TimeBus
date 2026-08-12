@@ -159,5 +159,14 @@ public class TimeBus {
             }
         }
 
+        /**
+         * 爆炸合成：奇点 + 铁锭/铁块物品实体在爆炸时转化为时间压印模板
+         * （机制参照 AE2 量子缠绕态奇点；Detonate 在实体伤害前触发，原料仍存活）。
+         */
+        @SubscribeEvent
+        public static void onExplosionDetonate(final net.minecraftforge.event.world.ExplosionEvent.Detonate event) {
+            com.zhenzi233.timebus.recipe.ExplosionSynthesis.onExplosionDetonate(event);
+        }
+
     }
 }

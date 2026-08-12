@@ -96,3 +96,5 @@ msg.timebus.bus_idle=不是有效的总线
 msg.timebus.no_active_recipe=机器没有正在运行的配方
 msg.timebus.cannot_accelerate=该方块无法被加速
 msg.timebus.mm_acceleration_disabled=MM 加速未开启,请在配置中开启「MM Acceleration Enabled」
+
+info.timebus.explosion_synthesis=爆炸合成:将奇点与铁锭(或铁块)丢在地上,用炸药引爆,\n即可将其转化为时间压印模板。

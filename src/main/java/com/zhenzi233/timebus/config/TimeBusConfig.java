@@ -441,6 +441,36 @@ public class TimeBusConfig {
         }
     }
 
+    /** 爆炸合成配置（奇点 + 铁 → 时间压印模板，机制参照 AE2 量子缠绕态奇点）。 */
+    @Config(modid = TimeBus.MOD_ID, category = "explosion")
+    @Config.LangKey("config.timebus.category.explosion")
+    public static class Explosion {
+
+        @Name("Enabled")
+        @LangKey("config.timebus.explosion.enabled")
+        @Comment({"是否启用爆炸合成:奇点与铁锭/铁块(物品实体,丢在地上)同时被爆炸波及",
+                "时转化为时间压印模板(默认 1 奇点 + 1 铁 → 1 模板)。默认 true"})
+        public static boolean explosionSynthesisEnabled = true;
+
+        @Name("Singularity Cost")
+        @LangKey("config.timebus.explosion.singularityCost")
+        @Comment("每次合成消耗的奇点数量。默认 1")
+        @RangeInt(min = 1, max = 64)
+        public static int singularityCost = 1;
+
+        @Name("Iron Cost")
+        @LangKey("config.timebus.explosion.ironCost")
+        @Comment("每次合成消耗的铁数量（铁锭或铁块均计入，ore dict ingotIron/blockIron）。默认 1")
+        @RangeInt(min = 1, max = 64)
+        public static int ironCost = 1;
+
+        @Name("Output Count")
+        @LangKey("config.timebus.explosion.outputCount")
+        @Comment("每次合成产出的时间压印模板数量。默认 1")
+        @RangeInt(min = 1, max = 64)
+        public static int outputCount = 1;
+    }
+
     /** ConfigManager.getConfiguration 是包私有方法，通过反射获取当前 cfg 实例。 */
     private static net.minecraftforge.common.config.Configuration getConfigInstance() {
         try {
