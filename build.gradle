@@ -59,7 +59,7 @@ unimined.minecraft {
         }
         loader "0.5.17-alpha"
         runs.all {
-            systemProperty("crl.dev.mixin", "${mod_id}.default.mixin.json,${mod_id}.mod.mixin.json,${mod_id}.mm.mixin.json,${mod_id}.mek.mixin.json")
+            systemProperty("crl.dev.mixin", "${mod_id}.default.mixin.json,${mod_id}.early.mixin.json,${mod_id}.mod.mixin.json,${mod_id}.mm.mixin.json,${mod_id}.mek.mixin.json")
             args += ['--username', minecraft_username]
             def extraArgs = extra_jvm_args
             if (extraArgs != null && !extraArgs.trim().isEmpty()) {

@@ -8,8 +8,7 @@
         "MixinUpgradeInvFilter",
         "MixinSlotRestrictedInput",
         "MixinTileInscriber",
-        "MixinTileCharger",
-        "MixinWorldTileUpdate"
+        "MixinTileCharger"
     ],
     "server": [],
     "setSourceFile": true,

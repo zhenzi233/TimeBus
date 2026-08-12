@@ -1,0 +1,9 @@
+{
+    "required": true,
+    "package": "com.zhenzi233.timebus.mixin.mod",
+    "compatibilityLevel": "JAVA_8",
+    "mixins": [
+        "MixinWorldTileUpdate"
+    ],
+    "minVersion": "0.8.7"
+}
