@@ -11,6 +11,7 @@ import appeng.parts.automation.PartExportBus;
 import appeng.parts.automation.PartImportBus;
 import com.zhenzi233.timebus.TimeBus;
 import com.zhenzi233.timebus.item.ItemTimeWand;
+import com.zhenzi233.timebus.util.AccelerateHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderGlobal;
@@ -50,7 +51,10 @@ import java.util.List;
  *   <li>否则用 {@code IPartHost.selectPartGlobal(hitVec)} 按射线命中点精确定位
  *       part（与 AE2 的 {@code RenderBlockOutlineHook} 同款）。</li>
  * </ol>
- * 电缆（{@link AEPartLocation#INTERNAL}）不算可加速目标，跳过。
+ * 高亮范围与魔杖实际互动一致：导入/导出总线画部件线框（批量传输）；
+ * 其他可加速方块（熔炉、作物、AE2 机器、MM 控制器等）画整体线框，
+ * 判定复用 {@code AccelerateHelper.canAccelerate}——高亮 = 点击必有效果。
+ * 电缆（{@link AEPartLocation#INTERNAL}）与不可加速目标（石头、ME 接口等）跳过。
  *
  * <p>渲染方式仿照 AE2 的 {@code RenderBlockOutlineHook}：两次深度 pass
  * （一次穿透方块、一次正常遮挡），线框颜色使用时间流体主题的青色，与 AE2
@@ -123,13 +127,26 @@ public class WandPartPreviewRenderer {
             }
         }
 
-        // 魔杖只对导入/导出总线有互动（批量传输），其他 part（ME 接口/终端/
-        // 面板/时间总线部件等）点击后什么都不做，不显示预览避免误导。
-        if (!(part instanceof PartExportBus || part instanceof PartImportBus)) {
+        // 魔杖互动判定:命中导入/导出总线 → 高亮总线部件(批量传输);
+        // 其他可加速方块(熔炉、作物、AE2 机器、MM 控制器等) → 高亮整个方块。
+        // 判定与 ItemTimeWand 服务端扣费前的 AccelerateHelper.canAccelerate
+        // 完全一致,保证"高亮 = 点击必有效果"。
+        if (part instanceof PartExportBus || part instanceof PartImportBus) {
+            renderPartPreview(part, pos, side, player, partialTicks);
             return;
         }
+        if (AccelerateHelper.canAccelerate(mc.world, pos)) {
+            renderBlockPreview(pos, player, partialTicks);
+        }
+    }
 
-        renderPartPreview(part, pos, side, player, partialTicks);
+    /** 可加速普通方块的整体线框预览(两次深度 pass,与 part 预览同款样式)。 */
+    private static void renderBlockPreview(BlockPos pos, EntityPlayer player, float partialTicks) {
+        final List<AxisAlignedBB> boxes = new ArrayList<>();
+        boxes.add(Minecraft.getMinecraft().world.getBlockState(pos).getSelectedBoundingBox(Minecraft.getMinecraft().world, pos));
+        offsetBoxes(boxes, pos, player, partialTicks);
+        renderBoxes(boxes, true);
+        renderBoxes(boxes, false);
     }
 
     /** 渲染两次深度 pass：先穿透方块，再正常遮挡。 */
