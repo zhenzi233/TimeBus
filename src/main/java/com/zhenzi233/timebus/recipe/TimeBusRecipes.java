@@ -101,8 +101,6 @@ public final class TimeBusRecipes {
         final ItemStack iron = new ItemStack(Items.IRON_INGOT);
         final ItemStack advCard = AEApi.instance().definitions().materials().advCard()
                 .maybeStack(1).orElse(ItemStack.EMPTY);
-        final ItemStack engPress = AEApi.instance().definitions().materials().engProcessorPress()
-                .maybeStack(1).orElse(ItemStack.EMPTY);
         final ItemStack inscriber = AEApi.instance().definitions().blocks().inscriber()
                 .maybeStack(1).orElse(ItemStack.EMPTY);
         final ItemStack energyCell = AEApi.instance().definitions().blocks().energyCell()
@@ -128,11 +126,5 @@ public final class TimeBusRecipes {
                 new ItemStack(ItemMachineParallelCard.ITEM),
                 net.minecraft.item.crafting.Ingredient.fromStacks(advCard),
                 net.minecraft.item.crafting.Ingredient.fromStacks(processor));
-
-        // Time Inscriber Template: 8 Matter Balls around an Engineering Processor Press
-        GameRegistry.addShapedRecipe(new ResourceLocation(TimeBus.MOD_ID, "time_inscriber_template"), null,
-                new ItemStack(ItemTimeInscriberTemplate.ITEM),
-                "mmm", "mpm", "mmm",
-                'm', matterBall, 'p', engPress);
     }
 }
