@@ -71,6 +71,9 @@ public class PartTimeSlowBus extends PartUpgradeable implements IGridTickable {
     public PartTimeSlowBus(final ItemStack is) {
         super(is);
         this.getConfigManager().registerSetting(Settings.REDSTONE_CONTROLLED, RedstoneMode.IGNORE);
+        // ContainerUpgradeable.loadSettingsFromHost 会读取这两个设置,缺一即抛
+        // IllegalStateException(与 PartTimeBus 一致,必须都注册)。
+        this.getConfigManager().registerSetting(Settings.FUZZY_MODE, appeng.api.config.FuzzyMode.IGNORE_ALL);
         this.getProxy().setIdlePowerUsage(TimeBusConfig.SlowBus.idlePower);
     }
 
