@@ -137,7 +137,7 @@ gradlew.bat build
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `Wand Cell Size (Bytes)` | `512` | 时间杖流体存储单元的容量（AE 字节，1 字节 = 8000 mB） |
-| `Wand Speed Multipliers` | `2,4,8,16,32` | 每张速度卡的时间杖倍率（逗号分隔） |
+| `Wand Speed Multipliers` | `32,64,128,256,512` | 每张速度卡的时间杖倍率（逗号分隔） |
 | `Wand Fluid Cost` | `10` | 每次使用消耗的时间流体 mB |
 | `Wand Energy Cost` | `1000` | 每次使用消耗的 AE 能量 |
 | `Wand Batch Size` | `16` | 右键输入/输出总线时连续运行的总线工作次数 |

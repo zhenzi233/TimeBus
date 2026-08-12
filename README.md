@@ -133,7 +133,7 @@ Runtime config is generated at `run/client/config/timebus.cfg` (Forge config, lo
 | Option | Default | Description |
 | --- | --- | --- |
 | `Wand Cell Size (Bytes)` | `512` | Storage size of the wand's fluid cell in AE bytes (1 byte = 8000 mB) |
-| `Wand Speed Multipliers` | `2,4,8,16,32` | Per-card wand speed multipliers (comma-separated) |
+| `Wand Speed Multipliers` | `32,64,128,256,512` | Per-card wand speed multipliers (comma-separated) |
 | `Wand Fluid Cost` | `10` | mB of Time Fluid consumed per use |
 | `Wand Energy Cost` | `1000` | AE consumed per use |
 | `Wand Batch Size` | `16` | Bus work runs per right-click on an Import/Export Bus |

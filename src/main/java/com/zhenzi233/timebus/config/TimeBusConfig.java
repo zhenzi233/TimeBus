@@ -33,6 +33,8 @@ public class TimeBusConfig {
     // 列表配置默认值单一来源：字段初始字符串与解析 fallback 都来自这里，
     // 改默认值只改常量，避免两处字面量漂移。
     private static final int[] DEFAULT_SPEED_MULTIPLIERS = {2, 4, 8, 16, 32};
+    /** 时间杖默认倍率：一次性点击加速,起步更高(0 卡 = 32x,满配 = 512x)。 */
+    private static final int[] DEFAULT_WAND_SPEED_MULTIPLIERS = {32, 64, 128, 256, 512};
     private static final int[] DEFAULT_CAPACITY_WIDTHS = {1, 3, 9, 15};
 
     /** 时间总线（Time Bus，ME 线缆部件）配置。 */
@@ -232,10 +234,10 @@ public class TimeBusConfig {
             "Nth value = speed when N-1 speed cards are installed in the wand",
             "(cards are placed via an AE2 cell workbench).",
             "If more cards than values, the last value repeats.",
-            "Example: 2,4,8,16,32 -> 0 cards=2x, 1 card=4x, 2 cards=8x, 3 cards=16x, 4 cards=32x",
+            "Example: 32,64,128,256,512 -> 0 cards=32x, 1 card=64x, 2 cards=128x, 3 cards=256x, 4 cards=512x",
             "This is independent from the Time Bus speedMultipliers."
         })
-        public static String wandSpeedMultipliers = join(DEFAULT_SPEED_MULTIPLIERS);
+        public static String wandSpeedMultipliers = join(DEFAULT_WAND_SPEED_MULTIPLIERS);
 
         @Name("Wand Fluid Cost (mB)")
         @LangKey("config.timebus.wand.wandFluidCost")
@@ -271,7 +273,7 @@ public class TimeBusConfig {
 
         public static int[] getWandSpeedMultipliers() {
             if (cachedWandSpeedMultipliers == null) {
-                cachedWandSpeedMultipliers = parseList(wandSpeedMultipliers, DEFAULT_SPEED_MULTIPLIERS);
+                cachedWandSpeedMultipliers = parseList(wandSpeedMultipliers, DEFAULT_WAND_SPEED_MULTIPLIERS);
             }
             return cachedWandSpeedMultipliers;
         }

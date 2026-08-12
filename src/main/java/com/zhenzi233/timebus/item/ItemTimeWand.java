@@ -134,14 +134,20 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             final boolean enough = hasEnoughResources(held);
             // Client side: if we hit an ME Import/Export Bus, intercept so the
             // bus GUI does not open (server will run the batch transfer).
-            final IPart hitPart = AEApi.instance().partHelper().getPart(worldIn, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
-            if (hitPart instanceof PartExportBus || hitPart instanceof PartImportBus) {
+            final IPart hitPart = findImportExportBus(worldIn, pos, facing, hitX, hitY, hitZ);
+            if (hitPart != null) {
                 // Visual feedback for the batch transfer: same outward burst
                 // as block acceleration (server can't spawn the 7-arg particles).
                 if (enough && TimeBusFluids.TIME_FLUID != null) {
                     spawnBurstParticles(worldIn, pos, getWandSpeed(held));
                 }
                 return EnumActionResult.SUCCESS;
+            }
+            // Only show the burst for targets the server will actually
+            // accelerate: the server re-checks the same predicate before
+            // charging, so the client must not animate a doomed click.
+            if (!AccelerateHelper.canAccelerate(worldIn, pos)) {
+                return EnumActionResult.FAIL;
             }
             // Otherwise render the particle burst locally. The 7-arg
             // World.spawnParticle overload only draws on the client, so the
@@ -158,9 +164,9 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
 
         // Shift + right-click on an ME Import/Export Bus: batch transfer
         // (consumes fluid + AE, runs the bus work wandBatchSize times).
-        final IPart hitPart = AEApi.instance().partHelper().getPart(worldIn, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
-        if (hitPart instanceof PartExportBus || hitPart instanceof PartImportBus) {
-            return handleBusBatch(worldIn, pos, facing, player, hand);
+        final IPart hitPart = findImportExportBus(worldIn, pos, facing, hitX, hitY, hitZ);
+        if (hitPart != null) {
+            return handleBusBatch(worldIn, pos, facing, player, hand, hitX, hitY, hitZ);
         }
 
         // Shift + right-click on an MM (CE) controller: accelerate the currently
@@ -186,6 +192,21 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
         // TODO(Mek): 魔杖对 Mek 机器目前只有约 0.5 秒的加速效果（活跃表 10 tick
         // 新鲜窗口，魔杖一次性点击不持续注册）。后续参考 MM 的 semi-permanent
         // 方案，对 Mek 做"当前配方加速到完成"的特化，此处预留分支位置。
+
+        // Pre-check that the target can be accelerated at all: without this
+        // the wand would charge for a click on stone / an empty cable bus /
+        // a Time Bus itself and then do nothing (the MM and bus paths have
+        // their own pre-checks above).
+        if (!AccelerateHelper.canAccelerate(worldIn, pos)) {
+            // MM 控制器在开关关闭时落入此路径（上方 MM 分支仅在开关开启时命中）：
+            // 给出针对性提示引导开配置，而不是笼统的"无法加速"。
+            if (targetTE != null && ModularMachineryAccelerator.isController(targetTE)) {
+                sendMmAccelerationDisabled(player);
+            } else {
+                sendCannotAccelerate(player);
+            }
+            return EnumActionResult.FAIL;
+        }
 
         // Consume AE power + Time Fluid (simulate first, commit only if both are available).
         if (!tryConsumeCosts(player, stack)) {
@@ -247,6 +268,20 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
             player.sendStatusMessage(new TextComponentTranslation("msg.timebus.no_active_recipe"), true);
         }
     }
+
+    /** Report that the targeted block cannot be accelerated at all. */
+    private void sendCannotAccelerate(final EntityPlayer player) {
+        if (player != null) {
+            player.sendStatusMessage(new TextComponentTranslation("msg.timebus.cannot_accelerate"), true);
+        }
+    }
+
+    /** Report that MM acceleration is switched off in the config. */
+    private void sendMmAccelerationDisabled(final EntityPlayer player) {
+        if (player != null) {
+            player.sendStatusMessage(new TextComponentTranslation("msg.timebus.mm_acceleration_disabled"), true);
+        }
+    }
     /**
      * Server-side resource payment: simulate AE power + Time Fluid first,
      * commit only if both are available, and tell the player what is missing.
@@ -304,16 +339,45 @@ public class ItemTimeWand extends AEBasePoweredItem implements IStorageCell<IAEF
     }
 
     /**
+     * 命中位置上的 ME 导入/导出总线 part（判定与客户端预览渲染器
+     * {@code WandPartPreviewRenderer} 一致）：先按点击面 (facing) 取 part；
+     * 斜向点击时命中面不是 part 安装面会取不到，再用
+     * {@code IPartHost.selectPartGlobal} 按射线命中点精确定位兜底。没有这个
+     * 兜底时，总线能被预览高亮、点击却落入通用路径报"无法加速"。
+     *
+     * @return 总线 part，命中位置不是导入/导出总线时返回 null
+     */
+    @Nullable
+    private IPart findImportExportBus(final net.minecraft.world.World world, final BlockPos pos,
+                                      final net.minecraft.util.EnumFacing facing,
+                                      final float hitX, final float hitY, final float hitZ) {
+        IPart part = AEApi.instance().partHelper().getPart(world, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
+        if (part instanceof PartExportBus || part instanceof PartImportBus) {
+            return part;
+        }
+        final appeng.api.parts.IPartHost host = AEApi.instance().partHelper().getPartHost(world, pos);
+        if (host != null) {
+            final appeng.api.parts.SelectedPart selected = host.selectPartGlobal(
+                    new net.minecraft.util.math.Vec3d(pos.getX() + hitX, pos.getY() + hitY, pos.getZ() + hitZ));
+            if (selected != null
+                    && (selected.part instanceof PartExportBus || selected.part instanceof PartImportBus)) {
+                return selected.part;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Shift right-click on an ME Import/Export Bus: consume Time Fluid + AE
      * and run the bus's tickingRequest N times (wandBatchSize), so one click
      * transfers many batches at once. Client predicts by checking the part type.
      */
     private EnumActionResult handleBusBatch(final net.minecraft.world.World world, final BlockPos pos,
                                             final net.minecraft.util.EnumFacing facing,
-                                            final EntityPlayer player, final EnumHand hand) {
-        final IPart part = AEApi.instance().partHelper().getPart(world, pos, appeng.api.util.AEPartLocation.fromFacing(facing));
-        final boolean isBus = part instanceof PartExportBus || part instanceof PartImportBus;
-        if (!isBus) {
+                                            final EntityPlayer player, final EnumHand hand,
+                                            final float hitX, final float hitY, final float hitZ) {
+        final IPart part = findImportExportBus(world, pos, facing, hitX, hitY, hitZ);
+        if (part == null) {
             return EnumActionResult.PASS; // not a bus: let default behavior (open GUI etc.) run
         }
 

@@ -37,6 +37,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code hasPermanentModifier} plus a WeakHashMap that remembers the injected
  * multiplier per thread (so a config change re-applies the new value).
  *
+ * <p>加速来源分两条追踪路径：总线每 tick 注入的 permanent modifier 登记在
+ * {@link #INJECTED}（断电/拆除/卸载时恢复）；魔杖注入的 semi-permanent
+ * 配方加速登记在 {@link #SEMI_INJECTED}（配方完成由 MM 自动清空，拆机/卸载/
+ * 关服由兜底清理摘除）。两张表都随世界弱引用，卸载后自动消失。
+ *
  * <p>All access goes through reflection (MM is an optional mod; Time Bus has
  * no hard dependency). If the classes are absent or signatures change, the
  * calls fail softly and are logged.
@@ -73,6 +78,21 @@ public final class ModularMachineryAccelerator {
      * away automatically when the World unloads.
      */
     private static final Map<World, Map<BlockPos, Set<String>>> INJECTED = new WeakHashMap<>();
+
+    /**
+     * 魔杖注入的 semi-permanent modifier 追踪（独立于 {@link #INJECTED}）。
+     *
+     * <p>魔杖的配方加速写入 {@code RecipeThread.semiPermanentModifiers}，MM 在
+     * 配方完成/失败时自动清空整表，正常路径无需干预；但配方中途拆机、区块卸载
+     * 或关服时 MM 的自动清空不会触发，加速状态可能随存档残留，因此单独登记，由
+     * {@link #restoreAllForWorld}/{@link #restoreAllForChunk}/{@link #restoreAll}
+     * 兜底清理。
+     *
+     * <p>不复用 INJECTED：{@link #isAccelerated}（工厂线程回收 Mixin 的判定）
+     * 只应反映持续注入的总线来源——魔杖是瞬时配方级加速，配方完成后线程理应
+     * 正常回收，若混入同一张表会导致空闲线程被长期保留。
+     */
+    private static final Map<World, Map<BlockPos, Set<String>>> SEMI_INJECTED = new WeakHashMap<>();
 
     /**
      * 记录每个控制器上次"强制刷新"的世界 tick。
@@ -402,6 +422,15 @@ public final class ModularMachineryAccelerator {
                     removePermanentModifier.invoke(thread, energyInKey);
                     removePermanentModifier.invoke(thread, energyOutKey);
                     removed += before - permanent.size();
+                    // 半永久表：魔杖点击注入的配方加速。配方自然完成时 MM 会自行
+                    // 清空；这里兜底配方中途拆机/区块卸载/关服等场景，幂等无害。
+                    final Map<String, Object> semi =
+                            (Map<String, Object>) getSemiPermanentModifiers.invoke(thread);
+                    final int semiBefore = semi.size();
+                    removeModifier.invoke(thread, durationKey);
+                    removeModifier.invoke(thread, energyInKey);
+                    removeModifier.invoke(thread, energyOutKey);
+                    removed += semiBefore - semi.size();
                 }
             }
             if (removed > 0) {
@@ -414,6 +443,7 @@ public final class ModularMachineryAccelerator {
             TimeBus.LOGGER.warn("Time Bus: MM restore failed at {}: {}", te.getPos(), e.toString());
         } finally {
             forgetInjected(te, sourceKey);
+            forgetSemiInjected(te, sourceKey);
             // 同时清掉"已应用"快照与强制刷新记录：否则重新 apply 时会被
             // isAppliedState 快路径跳过，导致恢复加速后机器反而不加速。
             forgetApplied(te, sourceKey);
@@ -466,19 +496,8 @@ public final class ModularMachineryAccelerator {
         if (!available) {
             return;
         }
-        final List<Map.Entry<BlockPos, String>> pending = new ArrayList<>();
-        synchronized (INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = INJECTED.get(world);
-            if (byPos == null || byPos.isEmpty()) {
-                return;
-            }
-            for (final Map.Entry<BlockPos, Set<String>> e : byPos.entrySet()) {
-                final BlockPos pos = e.getKey();
-                for (final String sourceKey : e.getValue()) {
-                    pending.add(new AbstractMap.SimpleEntry<>(pos, sourceKey));
-                }
-            }
-        }
+        final List<Map.Entry<BlockPos, String>> pending =
+                collectPendingRestores(world, Integer.MIN_VALUE, Integer.MIN_VALUE);
         for (final Map.Entry<BlockPos, String> e : pending) {
             final TileEntity te = world.getTileEntity(e.getKey());
             if (te != null) {
@@ -505,28 +524,47 @@ public final class ModularMachineryAccelerator {
         if (!available) {
             return;
         }
+        final int chunkX = chunk.getPos().x;
+        final int chunkZ = chunk.getPos().z;
+        final List<Map.Entry<BlockPos, String>> pending =
+                collectPendingRestores(world, chunkX, chunkZ);
+        for (final Map.Entry<BlockPos, String> e : pending) {
+            final TileEntity te = chunk.getTileEntityMap().get(e.getKey());
+            if (te != null) {
+                restore(te, e.getValue());
+            }
+        }
+    }
+
+    /**
+     * 收集 (pos, sourceKey) 待恢复列表，合并遍历 {@link #INJECTED}（总线）与
+     * {@link #SEMI_INJECTED}（魔杖）两张追踪表。chunkX/chunkZ 传
+     * {@link Integer#MIN_VALUE} 表示不按区块过滤（全量）。
+     */
+    private static List<Map.Entry<BlockPos, String>> collectPendingRestores(final World world,
+                                                                            final int chunkX, final int chunkZ) {
         final List<Map.Entry<BlockPos, String>> pending = new ArrayList<>();
-        synchronized (INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = INJECTED.get(world);
+        collectFromTable(pending, world, INJECTED, chunkX, chunkZ);
+        collectFromTable(pending, world, SEMI_INJECTED, chunkX, chunkZ);
+        return pending;
+    }
+
+    private static void collectFromTable(final List<Map.Entry<BlockPos, String>> pending, final World world,
+                                         final Map<World, Map<BlockPos, Set<String>>> table,
+                                         final int chunkX, final int chunkZ) {
+        synchronized (table) {
+            final Map<BlockPos, Set<String>> byPos = table.get(world);
             if (byPos == null || byPos.isEmpty()) {
                 return;
             }
-            final int chunkX = chunk.getPos().x;
-            final int chunkZ = chunk.getPos().z;
             for (final Map.Entry<BlockPos, Set<String>> e : byPos.entrySet()) {
                 final BlockPos pos = e.getKey();
-                if ((pos.getX() >> 4) != chunkX || (pos.getZ() >> 4) != chunkZ) {
+                if (chunkX != Integer.MIN_VALUE && ((pos.getX() >> 4) != chunkX || (pos.getZ() >> 4) != chunkZ)) {
                     continue;
                 }
                 for (final String sourceKey : e.getValue()) {
                     pending.add(new AbstractMap.SimpleEntry<>(pos, sourceKey));
                 }
-            }
-        }
-        for (final Map.Entry<BlockPos, String> e : pending) {
-            final TileEntity te = chunk.getTileEntityMap().get(e.getKey());
-            if (te != null) {
-                restore(te, e.getValue());
             }
         }
     }
@@ -568,8 +606,13 @@ public final class ModularMachineryAccelerator {
      *
      * <p>modifier 写入 {@code RecipeThread.semiPermanentModifiers}：MM 在配方完成
      * （或失败）时自动清空该表，因此加速效果**只持续到当前进度完成**，之后所有
-     * 配方恢复原速，不会留下任何持久状态。空闲线程不注入（它们没有当前配方，
-     * 注入会让未来的配方也被加速）。重复点击幂等：同倍率跳过，不同倍率替换。
+     * 配方恢复原速。空闲线程不注入（它们没有当前配方，注入会让未来的配方也被
+     * 加速）。重复点击幂等：同倍率跳过，不同倍率替换。
+     *
+     * <p>兜底清理：注入成功的同时登记进 {@link #SEMI_INJECTED}。配方自然完成
+     * 由 MM 自动清空；配方中途拆机、区块卸载或关服等场景由
+     * {@link #restoreAllForWorld}/{@link #restoreAllForChunk}/{@link #restoreAll}
+     * 统一摘除，双保险确保加速状态不会随存档残留。
      *
      * @return true 表示至少一个线程被注入/更新
      */
@@ -620,6 +663,7 @@ public final class ModularMachineryAccelerator {
                 }
             }
             if (touched) {
+                rememberSemiInjected(te, sourceKey);
                 TimeBus.LOGGER.info("Time Bus: wand MM semi-accelerated source={} speed={} at {} ({} threads, tile {})",
                         sourceKey, speed, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
@@ -748,6 +792,40 @@ public final class ModularMachineryAccelerator {
         // 同步清理各状态缓存，避免拆除/过期后残留（代码审查 4.4）。
         forgetApplied(te, sourceKey);
         forgetForceRefresh(te);
+    }
+
+    /** 记录魔杖 semi-permanent 注入（见 {@link #SEMI_INJECTED} 的说明）。 */
+    private static void rememberSemiInjected(final TileEntity te, final String sourceKey) {
+        if (te == null || sourceKey == null) {
+            return;
+        }
+        synchronized (SEMI_INJECTED) {
+            SEMI_INJECTED.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
+                    .computeIfAbsent(te.getPos(), p -> new HashSet<>())
+                    .add(sourceKey);
+        }
+    }
+
+    private static void forgetSemiInjected(final TileEntity te, final String sourceKey) {
+        if (te == null || sourceKey == null) {
+            return;
+        }
+        synchronized (SEMI_INJECTED) {
+            final Map<BlockPos, Set<String>> byPos = SEMI_INJECTED.get(te.getWorld());
+            if (byPos == null) {
+                return;
+            }
+            final Set<String> sources = byPos.get(te.getPos());
+            if (sources != null) {
+                sources.remove(sourceKey);
+                if (sources.isEmpty()) {
+                    byPos.remove(te.getPos());
+                }
+            }
+            if (byPos.isEmpty()) {
+                SEMI_INJECTED.remove(te.getWorld());
+            }
+        }
     }
 
     /**

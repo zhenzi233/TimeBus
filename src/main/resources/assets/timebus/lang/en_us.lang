@@ -68,3 +68,5 @@ msg.timebus.not_enough_energy=Not enough AE power in the Time Wand
 msg.timebus.not_enough_fluid=Not enough Time Fluid in the Time Wand
 msg.timebus.bus_idle=Not a valid bus
 msg.timebus.no_active_recipe=The machine has no running recipe
+msg.timebus.cannot_accelerate=This block cannot be accelerated
+msg.timebus.mm_acceleration_disabled=MM acceleration is disabled - enable "MM Acceleration Enabled" in the config

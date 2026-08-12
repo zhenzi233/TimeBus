@@ -52,6 +52,44 @@ public final class AccelerateHelper {
         NONE
     }
 
+    /**
+     * 该方块是否可被加速引擎处理（无副作用，用于时间杖扣费前的预检）。
+     *
+     * <p>与 {@link #getTileKind} 保持单一事实来源：可加速 = 随机刻方块
+     * （无 tile 也可加速，如作物），或 tile 的加速类型非 NONE 且对应的
+     * 功能开关已开启（MM/MEK 类型在开关关闭时 {@link #runTileUpdates}
+     * 不会做任何事，预检须一致，否则仍会空扣费）。
+     */
+    public static boolean canAccelerate(final World world, final BlockPos pos) {
+        if (world == null || pos == null) {
+            return false;
+        }
+        final IBlockState state = world.getBlockState(pos);
+        final Block block = state.getBlock();
+        if (block == null || block.isAir(state, world, pos)) {
+            return false;
+        }
+        // 随机刻方块：无 tile 也能加速（作物、草方块等）。
+        if (block.getTickRandomly()) {
+            return true;
+        }
+        final TileEntity te = world.getTileEntity(pos);
+        if (te == null) {
+            return false;
+        }
+        final TileKind kind = getTileKind(te);
+        switch (kind) {
+            case MM_CONTROLLER:
+                return TimeBusConfig.MM.mmAccelerationEnabled;
+            case MEK_MACHINE:
+                return MekanismAccelerator.isGenerator(te)
+                        ? TimeBusConfig.Mek.mekGeneratorAccelerationEnabled
+                        : TimeBusConfig.Mek.mekAccelerationEnabled;
+            default:
+                return kind != TileKind.NONE;
+        }
+    }
+
     /** Classify a tile entity (null-safe). */
     public static TileKind getTileKind(final TileEntity te) {
         if (te instanceof appeng.tile.misc.TileCharger) {

@@ -131,7 +131,7 @@ Forge 1.12.2 `@Config` 按功能分类组织（嵌套静态类），cfg 键带�
 | `maxCallsPerTick` | 128 | 工作预算（调用次数/ tick） |
 | `matterBallUnit` / `singularityUnit` / `unitsPerBatch` / `timeFluidPerBatch` | 1/1000/64000/1000 | 发生器换算 |
 | `wandBytes` | `512` | 时间杖存储单元字节数（AE2EL 流体单元 1 字节 = 8000 mB，512 字节 ≈ 4096 桶） |
-| `wandSpeedMultipliers` | `"2,4,8,16,32"` | 时间杖加速卡倍率（逗号分隔字符串，解析一次并缓存，独立于总线） |
+| `wandSpeedMultipliers` | `"32,64,128,256,512"` | 时间杖加速卡倍率（逗号分隔字符串，解析一次并缓存，独立于总线） |
 | `wandFluidCost` / `wandEnergyCost` | 10 / 1000 | 时间杖单次消耗 |
 | `wandBatchSize` | 16 | 总线批量传输的批次次数 |
 | `mmAccelerationEnabled` | false | MM(CE) 配方时长压缩（opt-in，倍率=总线速度卡：0卡=2x…满配=32x，每批总消耗不变） |
