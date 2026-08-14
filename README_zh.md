@@ -135,6 +135,9 @@ gradlew.bat build
 | `Minimum Fluid` | `1000` | ME 网络中至少保留多少 mB 才启动 |
 | `Max Calls per Tick` | `128` | 工作预算（每服务器 tick 的加速调用次数） |
 | `Random Tick Calls per Speed Unit` | `20` | 每个速度单位对随机刻方块执行的 Block.randomTick 调用次数（32x 时每方块 640 次；若随机刻加速挤占预算可调低） |
+| `Block List Enabled` | `false` | 方块黑白名单开关：开启后按方块注册名过滤加速目标（仅按方块本身匹配，无视方块 NBT） |
+| `Block List Mode` | `BLACKLIST` | 名单模式：`BLACKLIST` = 名单内的方块禁止被加速；`WHITELIST` = 只有名单内的方块会被加速 |
+| `Block List` | 空 | 方块注册名列表（逗号分隔，支持 `modid:*` 通配，无命名空间的名称默认补 `minecraft:`），如 `minecraft:furnace,minecraft:chest` 或 `appliedenergistics2:*,mekanism:*` |
 
 ### 时间减速总线
 
@@ -143,6 +146,9 @@ gradlew.bat build
 | `Slowdown Multipliers` | `2,4,8,16,32` | 每张速度卡的减速档位（逗号分隔）：第 N 个值 = N-1 张卡时每多少 tick 执行一次 update（0 卡 = 半速，满配 = 1/32 速） |
 | `Idle Power Draw` | `1.0` | 空闲时每 tick 消耗的 AE 能量 |
 | `Power Cost per Slowdown Unit` | `0.5` | 每单位减速档位的 AE 能耗倍率 |
+| `Block List Enabled` | `false` | 方块黑白名单开关：开启后按方块注册名过滤减速目标（仅按方块本身匹配，无视方块 NBT） |
+| `Block List Mode` | `BLACKLIST` | 名单模式：`BLACKLIST` = 名单内的方块禁止被减速；`WHITELIST` = 只有名单内的方块会被减速 |
+| `Block List` | 空 | 方块注册名列表（逗号分隔，支持 `modid:*` 通配，无命名空间的名称默认补 `minecraft:`） |
 
 ### 时间流体发生器
 

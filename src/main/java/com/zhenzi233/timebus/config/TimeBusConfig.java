@@ -30,6 +30,14 @@ public class TimeBusConfig {
     /** 配置类独立日志，避免静态初始化耦合主类（主类依赖 AE2 API，纯逻辑单测时不加载）。 */
     private static final Logger LOGGER = LogManager.getLogger("TimeBusConfig");
 
+    /** 方块黑白名单模式（时间总线与减速总线各自独立配置）。 */
+    public enum ListMode {
+        /** 黑名单：名单内的方块禁止被加速/减速，其余放行。 */
+        BLACKLIST,
+        /** 白名单：只有名单内的方块允许被加速/减速，其余禁止。 */
+        WHITELIST
+    }
+
     // 列表配置默认值单一来源：字段初始字符串与解析 fallback 都来自这里，
     // 改默认值只改常量，避免两处字面量漂移。
     private static final int[] DEFAULT_SPEED_MULTIPLIERS = {2, 4, 8, 16, 32};
@@ -137,9 +145,40 @@ public class TimeBusConfig {
         @RangeInt(min = 1, max = 100000)
         public static int maxCallsPerTick = 128;
 
+        // --- Block List (blacklist / whitelist) ---
+
+        @Name("Block List Enabled")
+        @LangKey("config.timebus.bus.busListEnabled")
+        @Comment({
+            "If true, the Time Bus consults a block list before accelerating each block.",
+            "Blocks are matched by registry name only (tile NBT is ignored).",
+            "Default: false"
+        })
+        public static boolean busListEnabled = false;
+
+        @Name("Block List Mode")
+        @LangKey("config.timebus.bus.busListMode")
+        @Comment({
+            "BLACKLIST: blocks in the list are never accelerated, everything else is.",
+            "WHITELIST: only blocks in the list are accelerated, everything else is not.",
+            "Default: BLACKLIST"
+        })
+        public static ListMode busListMode = ListMode.BLACKLIST;
+
+        @Name("Block List")
+        @LangKey("config.timebus.bus.busBlockList")
+        @Comment({
+            "Comma-separated block registry names. 'modid:*' matches every block of a mod;",
+            "a bare name without namespace defaults to 'minecraft:'.",
+            "Examples: 'minecraft:furnace,minecraft:chest' or 'appliedenergistics2:*,mekanism:*'",
+            "Default: (empty)"
+        })
+        public static String busBlockList = "";
+
         // int[] 缓存字段不会被 Forge 当配置项（不支持数组类型，自动跳过）。
         static int[] cachedSpeedMultipliers = null;
         static int[] cachedCapacityWidths = null;
+        static BlockListFilter cachedBusFilter = null;
 
         public static int[] getSpeedMultipliers() {
             if (cachedSpeedMultipliers == null) {
@@ -153,6 +192,14 @@ public class TimeBusConfig {
                 cachedCapacityWidths = parseList(capacityWidths, DEFAULT_CAPACITY_WIDTHS);
             }
             return cachedCapacityWidths;
+        }
+
+        /** 时间总线黑白名单（enabled/mode/list 解析一次并缓存，onConfigChanged 失效）。 */
+        public static BlockListFilter getBusFilter() {
+            if (cachedBusFilter == null) {
+                cachedBusFilter = new BlockListFilter(busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
+            }
+            return cachedBusFilter;
         }
     }
 
@@ -412,8 +459,10 @@ public class TimeBusConfig {
     private static void invalidateCaches() {
         Bus.cachedSpeedMultipliers = null;
         Bus.cachedCapacityWidths = null;
+        Bus.cachedBusFilter = null;
         Wand.cachedWandSpeedMultipliers = null;
         SlowBus.cachedSlowdownMultipliers = null;
+        SlowBus.cachedSlowBusFilter = null;
     }
 
     /**
@@ -503,14 +552,53 @@ public class TimeBusConfig {
         @RangeDouble(min = 0.0, max = 100.0)
         public static double powerPerSpeed = 0.5;
 
+        // --- Block List (blacklist / whitelist) ---
+
+        @Name("Block List Enabled")
+        @LangKey("config.timebus.slowBus.slowBusListEnabled")
+        @Comment({
+            "If true, the Slow Bus consults a block list before slowing down each block.",
+            "Blocks are matched by registry name only (tile NBT is ignored).",
+            "Default: false"
+        })
+        public static boolean slowBusListEnabled = false;
+
+        @Name("Block List Mode")
+        @LangKey("config.timebus.slowBus.slowBusListMode")
+        @Comment({
+            "BLACKLIST: blocks in the list are never slowed down, everything else is.",
+            "WHITELIST: only blocks in the list are slowed down, everything else is not.",
+            "Default: BLACKLIST"
+        })
+        public static ListMode slowBusListMode = ListMode.BLACKLIST;
+
+        @Name("Block List")
+        @LangKey("config.timebus.slowBus.slowBusBlockList")
+        @Comment({
+            "Comma-separated block registry names. 'modid:*' matches every block of a mod;",
+            "a bare name without namespace defaults to 'minecraft:'.",
+            "Default: (empty)"
+        })
+        public static String slowBusBlockList = "";
+
         // int[] 缓存字段不会被 Forge 当配置项（不支持数组类型，自动跳过）。
         static int[] cachedSlowdownMultipliers = null;
+        static BlockListFilter cachedSlowBusFilter = null;
 
         public static int[] getSlowdownMultipliers() {
             if (cachedSlowdownMultipliers == null) {
                 cachedSlowdownMultipliers = parseList(slowdownMultipliers, DEFAULT_SLOWDOWN_MULTIPLIERS);
             }
             return cachedSlowdownMultipliers;
+        }
+
+        /** 减速总线黑白名单（enabled/mode/list 解析一次并缓存，onConfigChanged 失效）。 */
+        public static BlockListFilter getSlowBusFilter() {
+            if (cachedSlowBusFilter == null) {
+                cachedSlowBusFilter = new BlockListFilter(slowBusListEnabled,
+                        slowBusListMode == ListMode.WHITELIST, slowBusBlockList);
+            }
+            return cachedSlowBusFilter;
         }
     }
 

@@ -433,6 +433,13 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
             switch (workPhase) {
                 case PHASE_SCHEDULE: {
+                    // 黑白名单：名单外的方块整块跳过（不调度、不加速、不随机刻），
+                    // 不算工作预算。只按方块注册名匹配、无视 tile NBT。
+                    final net.minecraft.util.ResourceLocation blockRl = targetBlock.getRegistryName();
+                    if (blockRl == null || !TimeBusConfig.Bus.getBusFilter().allows(blockRl.toString())) {
+                        advancePhase(targetBlock, target, world, speed);
+                        break;
+                    }
                     if (!targetBlock.isAir(targetState, world, target)) {
                         workDidSomething = true;
                         try {

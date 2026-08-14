@@ -4,6 +4,7 @@ config.timebus.category.timeGenerator=时间流体发生器
 config.timebus.category.wand=时间杖
 config.timebus.category.mm=Modular Machinery
 config.timebus.category.mek=Mekanism
+config.timebus.category.slowBus=时间减速总线
 config.timebus.bus.speedMultipliers=速度倍率
 config.timebus.bus.idlePower=空闲耗电（AE/t）
 config.timebus.bus.powerPerSpeed=每速度单位能耗倍率
@@ -15,6 +16,9 @@ config.timebus.bus.fluidConsumeMultiplier=流体消耗倍率（每张卡）
 config.timebus.bus.minFluid=最小流体量（mB）
 config.timebus.bus.capacityWidths=容量宽度
 config.timebus.bus.maxCallsPerTick=每 tick 最大调用次数（工作预算）
+config.timebus.bus.busListEnabled=方块名单开关
+config.timebus.bus.busListMode=方块名单模式
+config.timebus.bus.busBlockList=方块名单
 config.timebus.bus.speedMultipliers.comment=每张速度卡的加速倍率（逗号分隔）。第 N 个值 = 安装 N-1 张卡时的倍率；卡数超过数值个数时取最后一个。示例：2,4,8,16,32 -> 0卡=2倍, 1卡=4倍, 2卡=8倍, 3卡=16倍, 4卡=32倍
 config.timebus.bus.idlePower.comment=空闲（未加速）时每 tick 消耗的 AE 能量。默认 1.0
 config.timebus.bus.powerPerSpeed.comment=能耗倍率。每 tick 总耗电 = max(空闲耗电, (有效速度 + 2 × 升级卡数) × 该倍率)。默认 0.5
@@ -58,6 +62,12 @@ config.timebus.mek.mekAccelerationEnabled=Mek 加速
 config.timebus.mek.mekGeneratorAccelerationEnabled=发电机加速
 config.timebus.mek.mekAccelerationEnabled.comment=开启后时间总线加速 Mekanism(CE-Unofficial) 机器：每服务器 tick 重复运行配方刻多次（每次额外推进 1 刻并消耗 1 刻能量，单次配方总耗电不变）。需要 Mekanism-CE-Unofficial；缺失或版本不匹配时静默跳过。默认 false
 config.timebus.mek.mekGeneratorAccelerationEnabled.comment=开启后时间总线/时间杖加速 Mek 发电机（风力/燃气/生物/太阳能/先进太阳能/热力/大型多模块）：加速时每 tick 多产 N 倍电（N=总线速度倍率）且不额外消耗燃料——纯免费产电，刻意不平衡。绕过 Mek 自身的受限 tick 防加速设计。需要 Mekanism-CE-Unofficial；缺失或版本不匹配时静默跳过。默认 true
+config.timebus.bus.busListEnabled.comment=开启后时间总线在加速每个方块前查询方块名单。仅按方块注册名匹配，无视方块 NBT。默认 false
+config.timebus.bus.busListMode.comment=BLACKLIST：名单内的方块永远不被加速（其余照常）；WHITELIST：只有名单内的方块被加速（其余不处理）。默认 BLACKLIST
+config.timebus.bus.busBlockList.comment=逗号分隔的方块注册名。'modid:*' 匹配该 mod 的全部方块；无命名空间的名称默认补 'minecraft:'。示例：'minecraft:furnace,minecraft:chest' 或 'appliedenergistics2:*,mekanism:*'。默认空
+config.timebus.slowBus.slowBusListEnabled.comment=开启后减速总线在减速每个方块前查询方块名单。仅按方块注册名匹配，无视方块 NBT。默认 false
+config.timebus.slowBus.slowBusListMode.comment=BLACKLIST：名单内的方块永远不被减速（其余照常）；WHITELIST：只有名单内的方块被减速（其余不处理）。默认 BLACKLIST
+config.timebus.slowBus.slowBusBlockList.comment=逗号分隔的方块注册名。'modid:*' 匹配该 mod 的全部方块；无命名空间的名称默认补 'minecraft:'。默认空
 item.timebus.time_bus.name=时间总线
 item.timebus.time_slow_bus.name=时间减速总线
 item.timebus.debug_wand.name=调试棒

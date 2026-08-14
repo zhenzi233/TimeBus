@@ -264,6 +264,12 @@ public class PartTimeSlowBus extends PartUpgradeable implements IGridTickable {
             if (!world.isBlockLoaded(target)) {
                 continue;
             }
+            // 黑白名单：名单外的方块不登记减速（只按方块注册名匹配、无视 NBT）。
+            final net.minecraft.util.ResourceLocation blockRl =
+                    world.getBlockState(target).getBlock().getRegistryName();
+            if (blockRl == null || !TimeBusConfig.SlowBus.getSlowBusFilter().allows(blockRl.toString())) {
+                continue;
+            }
             final TileEntity te = world.getTileEntity(target);
             if (te instanceof ITickable) {
                 TileSlowdownTable.register(world, target, n, tick);

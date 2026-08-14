@@ -129,6 +129,7 @@ Forge 1.12.2 `@Config` 按功能分类组织（嵌套静态类），cfg 键带�
 | `fluidMode` / `fluidName` / `fluidPerTick` / `fluidConsumeMultiplier` / `minFluid` | - | 总线流体消耗模式 |
 | `capacityWidths` | `"1,3,9,15"` | 容量卡宽度（逗号分隔字符串，解析一次并缓存） |
 | `maxCallsPerTick` | 128 | 工作预算（调用次数/ tick） |
+| `busListEnabled` / `busListMode` / `busBlockList` | false / BLACKLIST / 空 | 时间总线黑白名单：按方块注册名过滤加速目标（无视 NBT），`BLACKLIST`=名单内禁止、`WHITELIST`=仅名单内允许；列表支持 `modid:*` 通配、裸名补 `minecraft:`。减速总线同名配置在 `SlowBus` 分类（`slowBusListEnabled` 等），互不影响 |
 | `matterBallUnit` / `singularityUnit` / `unitsPerBatch` / `timeFluidPerBatch` | 1/1000/64000/1000 | 发生器换算 |
 | `wandBytes` | `512` | 时间杖存储单元字节数（AE2EL 流体单元 1 字节 = 8000 mB，512 字节 ≈ 4096 桶） |
 | `wandSpeedMultipliers` | `"32,64,128,256,512"` | 时间杖加速卡倍率（逗号分隔字符串，解析一次并缓存，独立于总线） |
