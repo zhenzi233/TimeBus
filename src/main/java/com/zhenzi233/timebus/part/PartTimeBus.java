@@ -471,6 +471,15 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     break;
                 }
                 case PHASE_TILE: {
+                    // 跨 tick 续跑时名单可能已变更：复查一次（同 PHASE_SCHEDULE 语义），
+                    // 否则名单开启瞬间 PHASE_TILE 残留会继续连拍当前方块。
+                    final net.minecraft.util.ResourceLocation tileRl = targetBlock.getRegistryName();
+                    if (tileRl == null || !TimeBusConfig.Bus.getBusFilter().allows(tileRl.toString())) {
+                        workBlockIndex++;
+                        workPhase = PHASE_SCHEDULE;
+                        workPhaseRemaining = 0;
+                        break;
+                    }
                     int n = Math.min(workPhaseRemaining, budget - used);
                     n = AccelerateHelper.runTileUpdates(world, target, n, speed, sourceKey, scheduleTE, scheduleKind);
                     used += n;
@@ -488,6 +497,14 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     break;
                 }
                 case PHASE_RANDOM: {
+                    // 跨 tick 续跑时名单可能已变更：复查一次（名单外方块不做随机刻加速）。
+                    final net.minecraft.util.ResourceLocation randomRl = targetBlock.getRegistryName();
+                    if (randomRl == null || !TimeBusConfig.Bus.getBusFilter().allows(randomRl.toString())) {
+                        workBlockIndex++;
+                        workPhase = PHASE_SCHEDULE;
+                        workPhaseRemaining = 0;
+                        break;
+                    }
                     int n = Math.min(workPhaseRemaining, budget - used);
                     n = AccelerateHelper.runRandomTicks(world, target, targetState, targetBlock, n);
                     used += n;
