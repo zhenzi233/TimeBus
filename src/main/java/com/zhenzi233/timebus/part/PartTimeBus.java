@@ -439,6 +439,9 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     // 随机刻加速，名单外方块必须整块跳过。
                     final net.minecraft.util.ResourceLocation blockRl = targetBlock.getRegistryName();
                     if (blockRl == null || !TimeBusConfig.Bus.getBusFilter().allows(blockRl.toString())) {
+                        if (blockRl != null) {
+                            TimeBus.LOGGER.info("Time Bus: block list blocked {} at {}", blockRl, target);
+                        }
                         workBlockIndex++;
                         workPhase = PHASE_SCHEDULE;
                         workPhaseRemaining = 0;
