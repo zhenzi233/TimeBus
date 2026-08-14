@@ -199,7 +199,7 @@ public class TimeBusConfig {
             refreshIfFileChanged();
             if (cachedBusFilter == null) {
                 cachedBusFilter = new BlockListFilter(busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
-                LOGGER.info("Time Bus: bus block list filter rebuilt (enabled={}, whitelist={}, list='{}')",
+                LOGGER.debug("Time Bus: bus block list filter rebuilt (enabled={}, whitelist={}, list='{}')",
                         busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
             }
             return cachedBusFilter;
@@ -753,7 +753,7 @@ public class TimeBusConfig {
                 }
                 forceSyncFromConfig();
                 invalidateCaches();
-                LOGGER.info("Time Bus: config changed -> synced (busListEnabled={}, busListMode={}, busBlockList='{}')",
+                LOGGER.debug("Time Bus: config changed -> synced (busListEnabled={}, busListMode={}, busBlockList='{}')",
                         Bus.busListEnabled, Bus.busListMode, Bus.busBlockList);
             }
         }
