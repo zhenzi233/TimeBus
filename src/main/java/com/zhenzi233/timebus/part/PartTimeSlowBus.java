@@ -62,6 +62,9 @@ public class PartTimeSlowBus extends PartUpgradeable implements IGridTickable {
 
     private final ItemStackHandler configInventory = new ItemStackHandler(9);
     private boolean lastRedstone = false;
+    // 空范围退避：前方连续 N tick 没有任何 ITickable 方块时降频扫描（SLOWER），
+    // 一旦登记到目标立即恢复每 tick 刷新（见 tickingRequest）。
+    private int idleTicks = 0;
     // 升级计数缓存：升级只在 GUI 插拔卡时变化，upgradesChanged() 时失效。
     private int cachedCardCount = -1;
     private int cachedCapacityCount = -1;
@@ -225,9 +228,18 @@ public class PartTimeSlowBus extends PartUpgradeable implements IGridTickable {
             return TickRateModulation.SLEEP;
         }
         extractAEPower(ticksSinceLastCall);
-        registerSlowdown();
-        // 减速登记本身开销可忽略,无需 idle 退避,保持每 tick 刷新使记录不失效。
-        return TickRateModulation.URGENT;
+        final boolean registered = registerSlowdown();
+        // 空范围退避：前方没有任何 ITickable 方块时降频扫描（SLOWER ≈ 10 tick
+        // 一次），不再每 tick 全宽 getTileEntity + instanceof。只在全空时退避——
+        // 此时减速表里没有本总线的记录，不存在"记录过期失效"问题；一旦登记到
+        // 目标立即恢复 URGENT 每 tick 刷新（保持"有目标时记录不失效"的语义，
+        // 目标出现后最多一个 SLOWER 间隔内生效）。
+        if (registered) {
+            idleTicks = 0;
+            return TickRateModulation.URGENT;
+        }
+        idleTicks++;
+        return idleTicks >= 40 ? TickRateModulation.SLOWER : TickRateModulation.URGENT;
     }
 
     /**
@@ -235,14 +247,17 @@ public class PartTimeSlowBus extends PartUpgradeable implements IGridTickable {
      *
      * <p>只登记有 ITickable tile 的方块（其他方块跳过,不占登记);每 tick 刷新
      * 记录使新鲜窗口永不失效,直到本总线停止工作。
+     *
+     * @return 是否登记到至少一个目标（供空范围退避判定）
      */
-    private void registerSlowdown() {
+    private boolean registerSlowdown() {
         final AEPartLocation facing = this.getSide();
         final net.minecraft.world.World world = getHost().getTile().getWorld();
         final BlockPos start = getHost().getTile().getPos().offset(facing.getFacing());
         final int width = getCapacityWidth();
         final int n = getEffectiveSlowdown();
         final long tick = world.getTotalWorldTime();
+        boolean registered = false;
 
         for (int i = 0; i < width; i++) {
             final BlockPos target = start.offset(facing.getFacing(), i);
@@ -252,8 +267,10 @@ public class PartTimeSlowBus extends PartUpgradeable implements IGridTickable {
             final TileEntity te = world.getTileEntity(target);
             if (te instanceof ITickable) {
                 TileSlowdownTable.register(world, target, n, tick);
+                registered = true;
             }
         }
+        return registered;
     }
 
     private void extractAEPower(int ticksSinceLastCall) {
