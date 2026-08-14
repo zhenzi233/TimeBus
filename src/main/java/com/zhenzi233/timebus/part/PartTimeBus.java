@@ -440,7 +440,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     final net.minecraft.util.ResourceLocation blockRl = targetBlock.getRegistryName();
                     if (blockRl == null || !TimeBusConfig.Bus.getBusFilter().allows(blockRl.toString())) {
                         if (blockRl != null) {
-                            TimeBus.LOGGER.debug("Time Bus: block list blocked {} at {}", blockRl, target);
+                            TimeBus.LOGGER.info("Time Bus: block list blocked {} at {}", blockRl, target);
                         }
                         workBlockIndex++;
                         workPhase = PHASE_SCHEDULE;
