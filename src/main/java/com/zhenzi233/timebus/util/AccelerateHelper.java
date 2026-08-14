@@ -110,6 +110,31 @@ public final class AccelerateHelper {
 
     /** Classify a tile entity (null-safe). */
     public static TileKind getTileKind(final TileEntity te) {
+        if (te == null) {
+            return TileKind.NONE;
+        }
+        final Class<?> clazz = te.getClass();
+        final TileKind cached = KIND_CACHE.get(clazz);
+        if (cached != null) {
+            return cached;
+        }
+        final TileKind kind = classify(te);
+        KIND_CACHE.put(clazz, kind);
+        return kind;
+    }
+
+    /**
+     * TileKind 分类结果缓存：同一 tile 类的分类恒定，每 tick 无需重走整条
+     * instanceof 链（MM/Mek 还各带一次 volatile 解析检查）。Class 对象由类
+     * 加载器强持有、不会卸载，无内存泄漏风险（不能用 WeakHashMap 弱键，否则
+     * 缓存形同虚设）。分类只依赖类型，不依赖配置开关（开关判断在
+     * canAccelerate/runTileUpdates 里按 kind 查配置），故缓存不会失效。
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, TileKind> KIND_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 原始 instanceof 分类链（首次遇到某 tile 类时执行一次，结果入缓存）。 */
+    private static TileKind classify(final TileEntity te) {
         if (te instanceof appeng.tile.misc.TileCharger) {
             return TileKind.CHARGER;
         }
@@ -175,6 +200,22 @@ public final class AccelerateHelper {
      */
     public static int runTileUpdates(final World world, final BlockPos target, final int n, final int speed,
                                      final String sourceKey) {
+        return runTileUpdates(world, target, n, speed, sourceKey, null, null);
+    }
+
+    /**
+     * 内部重载：调用方（时间总线 PHASE_SCHEDULE 阶段）已取过 tile 并完成分类，
+     * 直接传入避免同一 tick 内二次 {@code getTileEntity} + 分类链。
+     *
+     * <p>安全约定：{@code te}/{@code kind} 必须在同一 tick 内有效（tile 不会在
+     * tick 中途换类型）。跨 tick 续跑的 PHASE_TILE（预算耗尽后下一次 doWork）
+     * 传 null 回退到自行查找/分类；TE 被移除时 {@code targetTE == null} 直接
+     * 返回 0（与自分类路径的空引用防御一致）。
+     *
+     * @return how many calls actually ran
+     */
+    public static int runTileUpdates(final World world, final BlockPos target, final int n, final int speed,
+                                     final String sourceKey, final TileEntity te, final TileKind kind) {
         if (n <= 0 || world == null || target == null) {
             return 0;
         }
@@ -185,10 +226,13 @@ public final class AccelerateHelper {
         }
         // 防御性封顶：任何调用方（总线/魔杖）单次都不能超限。
         final int calls = Math.min(n, MAX_TILE_UPDATES_PER_CALL);
-        final TileEntity targetTE = world.getTileEntity(target);
-        final TileKind kind = getTileKind(targetTE);
+        final TileEntity targetTE = te != null ? te : world.getTileEntity(target);
+        if (targetTE == null) {
+            return 0;
+        }
+        final TileKind effectiveKind = kind != null ? kind : getTileKind(targetTE);
 
-        switch (kind) {
+        switch (effectiveKind) {
             case CHARGER: {
                 final appeng.tile.misc.TileCharger charger = (appeng.tile.misc.TileCharger) targetTE;
                 int ran = 0;

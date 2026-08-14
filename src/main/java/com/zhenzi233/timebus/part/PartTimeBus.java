@@ -75,6 +75,12 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
     private final ItemStackHandler configInventory = new ItemStackHandler(9);
     private boolean lastRedstone = false;
     private double fluidAccumulator = 0.0;
+    // 流体耗尽退避：连续提取不足后进入节流，每 FLUID_EMPTY_POLL_INTERVAL tick
+    // 才完整探测一次（照抄 TileTimeGenerator.EMPTY_POLL_INTERVAL 模式）；一旦
+    // 成功立即恢复每 tick 探测。网络缺流体时总线反正不干活（doWork 提前返回），
+    // 没理由每 tick 做两次全网格提取操作。
+    private static final int FLUID_EMPTY_POLL_INTERVAL = 10;
+    private int fluidEmptyTicks = 0;
     // Cached fluid-mode lookups. A registered fluid never changes at runtime,
     // so the lookup is done once and re-resolved only when the config name
     // changes (checked cheaply every call).
@@ -400,6 +406,11 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
         net.minecraft.world.World world = getHost().getTile().getWorld();
         BlockPos start = getHost().getTile().getPos().offset(facing.getFacing());
         final String sourceKey = getSourceKey();
+        // 同一 doWork 内 PHASE_SCHEDULE 取到的 tile/分类结果传给 PHASE_TILE，
+        // 避免同一 tick 对同一方块二次 getTileEntity + 分类链。跨 tick 续跑时
+        // 为 null，runTileUpdates 回退自分类（见其重载的 null 约定）。
+        TileEntity scheduleTE = null;
+        AccelerateHelper.TileKind scheduleKind = null;
 
         while (used < budget && workActive) {
             if (workBlockIndex >= width) {
@@ -432,8 +443,9 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                         }
                     }
                     used++;
-                    TileEntity targetTE = world.getTileEntity(target);
-                    if (AccelerateHelper.getTileKind(targetTE) != AccelerateHelper.TileKind.NONE) {
+                    scheduleTE = world.getTileEntity(target);
+                    scheduleKind = AccelerateHelper.getTileKind(scheduleTE);
+                    if (scheduleKind != AccelerateHelper.TileKind.NONE) {
                         workPhase = PHASE_TILE;
                         workPhaseRemaining = Math.max(0, speed - 1);
                         if (workPhaseRemaining == 0) {
@@ -446,7 +458,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 }
                 case PHASE_TILE: {
                     int n = Math.min(workPhaseRemaining, budget - used);
-                    n = AccelerateHelper.runTileUpdates(world, target, n, speed, sourceKey);
+                    n = AccelerateHelper.runTileUpdates(world, target, n, speed, sourceKey, scheduleTE, scheduleKind);
                     used += n;
                     if (n > 0) {
                         workDidSomething = true;
@@ -514,6 +526,14 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
 
     private boolean consumeFluid() {
         try {
+            // 节流检查：上次提取不足后先数 tick，未到间隔直接返回（不探测）。
+            // 到间隔时清零并走完整检查；成功路径同样清零恢复每 tick 探测。
+            if (fluidEmptyTicks > 0) {
+                if (++fluidEmptyTicks <= FLUID_EMPTY_POLL_INTERVAL) {
+                    return false;
+                }
+                fluidEmptyTicks = 0;
+            }
             // Accumulate fractional mB, extract only when >= 1 mB
             fluidAccumulator += TimeBusConfig.Bus.fluidPerTick * Math.pow(TimeBusConfig.Bus.fluidConsumeMultiplier, getCardCount());
             if (fluidAccumulator < 1.0) return true;
@@ -528,6 +548,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                         .getStorageChannel(IFluidStorageChannel.class);
             }
             if (cachedFluid == null) {
+                fluidEmptyTicks = 1;
                 return false;
             }
             IMEMonitor<IAEFluidStack> fluidInv = storage.getInventory(cachedFluidChannel);
@@ -538,7 +559,10 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             IAEFluidStack minCheck = AEFluidStack.fromFluidStack(
                     new FluidStack(fluid, TimeBusConfig.Bus.minFluid));
             IAEFluidStack simulated = fluidInv.extractItems(minCheck, Actionable.SIMULATE, machineSource);
-            if (simulated == null || simulated.getStackSize() < TimeBusConfig.Bus.minFluid) return false;
+            if (simulated == null || simulated.getStackSize() < TimeBusConfig.Bus.minFluid) {
+                fluidEmptyTicks = 1; // 网络缺流体:进入节流
+                return false;
+            }
 
             // Consume accumulated amount
             IAEFluidStack toConsume = AEFluidStack.fromFluidStack(
@@ -548,6 +572,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                 // Nothing was drained (simulate passed but modulate lost the
                 // race): put the amount back instead of losing it.
                 fluidAccumulator += toDrain;
+                fluidEmptyTicks = 1;
                 return false;
             }
             long actualDrained = extracted.getStackSize();
@@ -555,8 +580,10 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
             // part of the requested amount, carry the difference to the next
             // tick instead of silently billing more than was drained.
             fluidAccumulator += toDrain - actualDrained;
+            fluidEmptyTicks = 0; // 提取成功:恢复每 tick 探测
             return actualDrained > 0;
         } catch (GridAccessException e) {
+            fluidEmptyTicks = 1;
             return false;
         }
     }

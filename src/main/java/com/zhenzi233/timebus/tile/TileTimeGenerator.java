@@ -152,14 +152,26 @@ public class TileTimeGenerator extends AEBaseInvTile implements ITickable, appen
         }
     }
 
+    /**
+     * AEApi materials 引用缓存：AE2 definitions 在运行时不变，初始化一次即可，
+     * 避免每次 update 都做 API 单例查询（懒加载，调用发生在 update 主线程内，
+     * 无并发问题；AE2 未就绪前也不会走到这里）。
+     */
+    private static IMaterials cachedMaterials;
+
+    private static IMaterials materials() {
+        if (cachedMaterials == null) {
+            cachedMaterials = AEApi.instance().definitions().materials();
+        }
+        return cachedMaterials;
+    }
+
     private boolean isMatterBall(ItemStack is) {
-        IMaterials materials = AEApi.instance().definitions().materials();
-        return materials.matterBall().isSameAs(is);
+        return materials().matterBall().isSameAs(is);
     }
 
     private boolean isSingularity(ItemStack is) {
-        IMaterials materials = AEApi.instance().definitions().materials();
-        return materials.singularity().isSameAs(is);
+        return materials().singularity().isSameAs(is);
     }
 
     /** Current output mode (for GUI display). */
