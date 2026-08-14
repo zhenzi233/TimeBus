@@ -753,7 +753,7 @@ public class TimeBusConfig {
                 }
                 forceSyncFromConfig();
                 invalidateCaches();
-                LOGGER.debug("Time Bus: config changed -> synced (busListEnabled={}, busListMode={}, busBlockList='{}')",
+                LOGGER.info("Time Bus: config changed -> synced (busListEnabled={}, busListMode={}, busBlockList='{}')",
                         Bus.busListEnabled, Bus.busListMode, Bus.busBlockList);
             }
         }
