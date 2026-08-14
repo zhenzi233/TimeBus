@@ -26,7 +26,10 @@ public abstract class MixinWorldTileUpdate {
 
     @Unique
     private void timebus$maybeSkipTileUpdate(final ITickable tickable) {
-        if (tickable instanceof TileEntity) {
+        // 全局短路：全服没有任何减速方块时只付一次 volatile 读，跳过
+        // instanceof / getWorld / 同步查表（World.updateEntities 是服务端
+        // 最热的路径之一）。
+        if (TileSlowdownTable.isActive() && tickable instanceof TileEntity) {
             final TileEntity te = (TileEntity) tickable;
             final World world = te.getWorld();
             if (world != null && TileSlowdownTable.shouldSkip(world, te.getPos(), world.getTotalWorldTime())) {

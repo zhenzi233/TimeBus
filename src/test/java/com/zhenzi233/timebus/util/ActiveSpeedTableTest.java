@@ -76,4 +76,48 @@ class ActiveSpeedTableTest {
         // GC 不保证立即执行，极端环境下允许跳过而非失败。
         assumeTrue(objectTable.size() == 0, "弱键应在释放强引用后被回收");
     }
+
+    @Test
+    void removalHook_firesOnExpiryCleanup() {
+        final int[] removed = {0};
+        final ActiveSpeedTable<String> hooked = new ActiveSpeedTable<>(10, () -> removed[0]++);
+        hooked.register("a", 4, 100);
+        // 新鲜查询不触发删除回调。
+        hooked.query("a", 110);
+        assertEquals(0, removed[0]);
+        // 过期查询触发顺手删除 → 回调恰好一次。
+        assertNull(hooked.query("a", 111));
+        assertEquals(1, removed[0]);
+        // 再查同一 key：已删除，不重复回调。
+        assertNull(hooked.query("a", 112));
+        assertEquals(1, removed[0]);
+    }
+
+    @Test
+    void removalHook_firesForEachExpiredEntry() {
+        final int[] removed = {0};
+        final ActiveSpeedTable<String> hooked = new ActiveSpeedTable<>(10, () -> removed[0]++);
+        hooked.register("a", 4, 100);
+        hooked.register("b", 8, 100);
+        assertNull(hooked.query("a", 111));
+        assertNull(hooked.query("b", 111));
+        assertEquals(2, removed[0]);
+    }
+
+    @Test
+    void contains_reflectsTableMembership() {
+        table.register("a", 4, 100);
+        assertTrue(table.contains("a"));
+        assertFalse(table.contains("missing"));
+        assertFalse(table.contains(null));
+        // 过期条目在查询清理前仍被 contains 视为存在（调用方负责在同锁内配合）。
+        assertTrue(table.contains("a"));
+    }
+
+    @Test
+    void noHook_defaultConstructorIsSafe() {
+        final ActiveSpeedTable<String> plain = new ActiveSpeedTable<>(10);
+        plain.register("a", 4, 100);
+        assertNull(plain.query("a", 111), "无回调构造器在过期清理时不应抛错");
+    }
 }

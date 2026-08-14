@@ -28,9 +28,16 @@ public final class ActiveSpeedTable<K> {
     /** 记录新鲜窗口：超过该 tick 数未刷新即视为失效。 */
     private final long freshWindow;
     private final Map<K, AccelState> table = new WeakHashMap<>();
+    /** 条目被显式删除（过期清理）时的回调；用于外层全局活跃计数递减。 */
+    private final Runnable onEntryRemoved;
 
     public ActiveSpeedTable(final long freshWindow) {
+        this(freshWindow, null);
+    }
+
+    public ActiveSpeedTable(final long freshWindow, final Runnable onEntryRemoved) {
         this.freshWindow = freshWindow;
+        this.onEntryRemoved = onEntryRemoved;
     }
 
     /**
@@ -50,6 +57,11 @@ public final class ActiveSpeedTable<K> {
         return true;
     }
 
+    /** key 当前是否在表中（不判断新鲜度、不触发过期清理；配合外层计数使用）。 */
+    synchronized boolean contains(final K key) {
+        return key != null && table.containsKey(key);
+    }
+
     /** 查询 key 当前是否被加速；记录新鲜且 speed > 1 时返回 speed，否则 null。 */
     public synchronized Integer query(final K key, final long nowTick) {
         if (key == null) {
@@ -63,6 +75,9 @@ public final class ActiveSpeedTable<K> {
             // 过期即失效,顺手删除:避免仅靠弱引用回收的过期条目累积
             // (魔杖一次性点击等不再持续登记的加速源)。
             table.remove(key);
+            if (onEntryRemoved != null) {
+                onEntryRemoved.run();
+            }
             return null;
         }
         return state.speed > 1 ? state.speed : null;

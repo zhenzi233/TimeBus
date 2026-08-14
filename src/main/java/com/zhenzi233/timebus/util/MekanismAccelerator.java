@@ -7,6 +7,7 @@ import net.minecraft.world.World;
 
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Mekanism-CE-Unofficial 连拍加速（活跃表）。
@@ -31,6 +32,16 @@ public final class MekanismAccelerator {
 
     /** 每台被加速的 Mek 机器的活跃状态，按世界分组（world 弱引用，卸载自动清理）。 */
     private static final Map<World, ActiveSpeedTable<BlockPos>> ACTIVE = new WeakHashMap<>();
+
+    /**
+     * 活跃机器计数（新机器登记 +1，过期清理 -1）。
+     *
+     * <p>无任何被加速的 Mek 机器时，三个 Mek mixin 的查询入口直接短路——
+     * 每台 Mek 机器每次配方推进/产电/发包只多一次 volatile 读，不再做双重
+     * synchronized 查表。计数只会因弱键回收而偏高（无害：漏判只是多查一次
+     * 表，短路仅在计数为 0 时生效，此时表必为空）。
+     */
+    private static final AtomicInteger ACTIVE_COUNT = new AtomicInteger();
 
     private static volatile boolean resolved;
     private static volatile boolean available;
@@ -58,6 +69,11 @@ public final class MekanismAccelerator {
         return generatorAvailable && generatorClass.isAssignableFrom(te.getClass());
     }
 
+    /** 是否正有被加速的 Mek 机器（全局短路入口：计数为 0 时 mixin 可直接跳过查表）。 */
+    public static boolean isActive() {
+        return ACTIVE_COUNT.get() > 0;
+    }
+
     /**
      * TimeBus 每 tick 扫描到被加速的 Mek 机器时登记一次。
      *
@@ -70,14 +86,21 @@ public final class MekanismAccelerator {
         }
         synchronized (ACTIVE) {
             final ActiveSpeedTable<BlockPos> byPos =
-                    ACTIVE.computeIfAbsent(world, w -> new ActiveSpeedTable<>(FRESH_WINDOW));
-            return byPos.register(pos, speed, tick);
+                    ACTIVE.computeIfAbsent(world, w -> new ActiveSpeedTable<>(FRESH_WINDOW, ACTIVE_COUNT::decrementAndGet));
+            // 新条目才计入活跃计数（同 tick 刷新/替换不加）；contains 与 register
+            // 都在 ACTIVE 锁内执行，相对其它 ACTIVE 持有者是原子的。
+            final boolean isNew = !byPos.contains(pos);
+            final boolean registered = byPos.register(pos, speed, tick);
+            if (registered && isNew) {
+                ACTIVE_COUNT.incrementAndGet();
+            }
+            return registered;
         }
     }
 
     /** 查询机器当前是否被加速；记录新鲜且 speed > 1 时返回 speed，否则 null。 */
     public static Integer queryActive(final TileEntity te) {
-        if (te == null || te.getWorld() == null) {
+        if (te == null || te.getWorld() == null || ACTIVE_COUNT.get() == 0) {
             return null;
         }
         synchronized (ACTIVE) {

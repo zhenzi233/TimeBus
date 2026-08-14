@@ -6,6 +6,7 @@ import net.minecraft.world.World;
 
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 减速活跃表：记录"被时间减速总线减速"的方块与档位。
@@ -39,7 +40,22 @@ public final class TileSlowdownTable {
 
     private static final Map<World, Map<BlockPos, SlowState>> ACTIVE = new WeakHashMap<>();
 
+    /**
+     * 活跃条目计数（新方块登记 +1，过期清理 -1）。
+     *
+     * <p>零减速总线时 {@link MixinWorldTileUpdate} 的入口短路——全服没有任何减速
+     * 方块时，每个 ITickable tile 的 update 调用只多一次 volatile 读，不再做
+     * synchronized + WeakHashMap 查表。计数只会因弱键回收而偏高（无害：漏判
+     * 只是多查一次表，短路仅在计数为 0 时生效，此时表必为空）。
+     */
+    private static final AtomicInteger ACTIVE_COUNT = new AtomicInteger();
+
     private TileSlowdownTable() {
+    }
+
+    /** 减速表是否非空（全局短路入口：计数为 0 时可直接跳过查表）。 */
+    public static boolean isActive() {
+        return ACTIVE_COUNT.get() > 0;
     }
 
     /**
@@ -57,6 +73,9 @@ public final class TileSlowdownTable {
         if (existing != null && existing.tick == tick && existing.n >= n) {
             return false; // 同 tick 且不更慢:幂等
         }
+        if (existing == null) {
+            ACTIVE_COUNT.incrementAndGet(); // 新方块进表才计数（替换/刷新不加）
+        }
         byPos.put(pos, new SlowState(n, tick));
         return true;
     }
@@ -65,38 +84,44 @@ public final class TileSlowdownTable {
      * 查询本次 tick 是否应跳过该方块的 update 调用（mixin 每 tick 调用）。
      *
      * <p>命中（记录新鲜）且 {@code nowTick % n != 0} → true（跳过）；记录过期时
-     * 顺手删除并返回 false。未登记返回 false（正常执行）。
+     * 顺手删除并返回 false。未登记返回 false（正常执行）。计数为 0 时直接短路
+     * （不进入同步块）。
      */
-    public static synchronized boolean shouldSkip(final World world, final BlockPos pos, final long nowTick) {
-        if (world == null || pos == null) {
+    public static boolean shouldSkip(final World world, final BlockPos pos, final long nowTick) {
+        if (world == null || pos == null || ACTIVE_COUNT.get() == 0) {
             return false;
         }
-        final Map<BlockPos, SlowState> byPos = ACTIVE.get(world);
-        if (byPos == null) {
-            return false;
-        }
-        final SlowState state = byPos.get(pos);
-        if (state == null) {
-            return false;
-        }
-        if (nowTick - state.tick > FRESH_WINDOW) {
-            // 过期即失效,顺手删除:总线移走/断电后方块自动恢复原速。
-            byPos.remove(pos);
-            if (byPos.isEmpty()) {
-                ACTIVE.remove(world);
+        synchronized (TileSlowdownTable.class) {
+            final Map<BlockPos, SlowState> byPos = ACTIVE.get(world);
+            if (byPos == null) {
+                return false;
             }
-            return false;
+            final SlowState state = byPos.get(pos);
+            if (state == null) {
+                return false;
+            }
+            if (nowTick - state.tick > FRESH_WINDOW) {
+                // 过期即失效,顺手删除:总线移走/断电后方块自动恢复原速。
+                byPos.remove(pos);
+                ACTIVE_COUNT.decrementAndGet();
+                if (byPos.isEmpty()) {
+                    ACTIVE.remove(world);
+                }
+                return false;
+            }
+            return nowTick % state.n != 0;
         }
-        return nowTick % state.n != 0;
     }
 
     /** 该方块当前是否在减速表中（用于加速/减速互斥判定,不判断本次是否跳过）。 */
-    public static synchronized boolean isSlowed(final World world, final BlockPos pos) {
-        if (world == null || pos == null) {
+    public static boolean isSlowed(final World world, final BlockPos pos) {
+        if (world == null || pos == null || ACTIVE_COUNT.get() == 0) {
             return false;
         }
-        final Map<BlockPos, SlowState> byPos = ACTIVE.get(world);
-        return byPos != null && byPos.get(pos) != null;
+        synchronized (TileSlowdownTable.class) {
+            final Map<BlockPos, SlowState> byPos = ACTIVE.get(world);
+            return byPos != null && byPos.get(pos) != null;
+        }
     }
 
     /** 便捷重载：从 tile 直接判定（加速侧互斥检查用）。 */
