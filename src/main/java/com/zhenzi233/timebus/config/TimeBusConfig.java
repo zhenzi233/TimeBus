@@ -648,7 +648,7 @@ public class TimeBusConfig {
             if (mtime != lastCfgMtime) {
                 lastCfgMtime = mtime;
                 cfg.load(); // 从磁盘重读（恢复与文件的脱节）
-                ConfigManager.sync(TimeBus.MOD_ID, Config.Type.INSTANCE); // 字段 ← Configuration
+                forceSyncFromConfig(); // 无条件 Configuration → 静态字段
                 invalidateCaches();
                 LOGGER.info("Time Bus: config file changed on disk, reloaded.");
             }
@@ -657,12 +657,92 @@ public class TimeBusConfig {
         }
     }
 
+    /**
+     * 无条件把 Configuration（cfg 文件/内存）的值同步到各 @Config 分类类的静态字段。
+     *
+     * <p>参考 Mekanism 的配置体系：其 Option 每次从 Configuration 单向读值
+     * （prop.getBoolean() 等），不依赖 Forge @Config 的 shouldReadFromVar 双向
+     * 方向判定——后者在部分环境下会把「字段旧值」反向写回 Property，覆盖 GUI
+     * 的修改（症状：GUI 保存后重开仍是旧值）。本方法等价于
+     * {@code ConfigManager.sync(modid, INSTANCE)} 的 loading=true 分支，但不受
+     * Property.hasChanged() 状态影响，永远以 Configuration 为准。
+     */
+    private static void forceSyncFromConfig() {
+        try {
+            final net.minecraftforge.common.config.Configuration cfg = getConfigInstance();
+            if (cfg == null) {
+                return;
+            }
+            for (Class<?> cls : new Class<?>[]{Bus.class, TimeGenerator.class, Wand.class, MM.class,
+                    Mek.class, SlowBus.class, Explosion.class}) {
+                final net.minecraftforge.common.config.Config annotation =
+                        cls.getAnnotation(net.minecraftforge.common.config.Config.class);
+                if (annotation == null) {
+                    continue;
+                }
+                final String category = annotation.category();
+                for (java.lang.reflect.Field f : cls.getDeclaredFields()) {
+                    if (!java.lang.reflect.Modifier.isPublic(f.getModifiers())) {
+                        continue; // 缓存字段（cachedXxx）均为包私有，天然跳过
+                    }
+                    if (f.isAnnotationPresent(net.minecraftforge.common.config.Config.Ignore.class)) {
+                        continue;
+                    }
+                    final String key = f.isAnnotationPresent(net.minecraftforge.common.config.Config.Name.class)
+                            ? f.getAnnotation(net.minecraftforge.common.config.Config.Name.class).value()
+                            : f.getName();
+                    final Class<?> t = f.getType();
+                    try {
+                        final net.minecraftforge.common.config.Property prop;
+                        if (t == boolean.class) {
+                            prop = cfg.get(category, key, false, null);
+                            f.setBoolean(null, prop.getBoolean());
+                        } else if (t == int.class) {
+                            prop = cfg.get(category, key, 0, null);
+                            f.setInt(null, prop.getInt());
+                        } else if (t == double.class) {
+                            prop = cfg.get(category, key, 0.0, null);
+                            f.setDouble(null, prop.getDouble());
+                        } else if (t == String.class) {
+                            prop = cfg.get(category, key, "", null);
+                            f.set(null, prop.getString());
+                        } else if (t.isEnum()) {
+                            prop = cfg.get(category, key, "", null);
+                            f.set(null, Enum.valueOf((Class<Enum>) t, prop.getString()));
+                        } else {
+                            continue; // 其他类型（数组/对象等）不参与
+                        }
+                    } catch (Exception e) {
+                        LOGGER.debug("Time Bus: force sync field {}#{} failed: {}", cls.getSimpleName(), key, e.toString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("Time Bus: force sync config failed: {}", e.toString());
+        }
+    }
+
     @Mod.EventBusSubscriber(modid = TimeBus.MOD_ID)
     private static class EventHandler {
         @SubscribeEvent
         public static void onConfigChanged(ConfigChangedEvent.OnConfigChangedEvent event) {
             if (event.getModID().equals(TimeBus.MOD_ID)) {
-                ConfigManager.sync(TimeBus.MOD_ID, Config.Type.INSTANCE);
+                // 参考 Mekanism 的配置同步：GUI 保存后 Configuration 内存（Property）
+                // 已是新值（GuiConfig.saveConfigElements 已写入），这里无条件：
+                // ① cfg.save() 写盘 ② forceSyncFromConfig() 把 Property → 静态字段
+                // ③ 失效解析缓存。
+                // 不再调用 ConfigManager.sync：其 shouldReadFromVar 的方向判定在部分
+                // 环境下（Property.hasChanged 状态异常）会把「字段旧值」反向写回
+                // Property 并 save，覆盖 GUI 的修改——表现为"保存了但没应用/重开旧值"。
+                final net.minecraftforge.common.config.Configuration cfg = getConfigInstance();
+                if (cfg != null) {
+                    try {
+                        cfg.save();
+                    } catch (Exception e) {
+                        LOGGER.warn("Time Bus: failed to save config file: {}", e.toString());
+                    }
+                }
+                forceSyncFromConfig();
                 invalidateCaches();
             }
         }
