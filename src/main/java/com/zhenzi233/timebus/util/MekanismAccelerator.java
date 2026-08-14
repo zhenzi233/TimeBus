@@ -66,7 +66,9 @@ public final class MekanismAccelerator {
             return false;
         }
         resolveGenerator();
-        return generatorAvailable && generatorClass.isAssignableFrom(te.getClass());
+        // 与 isMachine 的 restrictedTickClass.isInstance(te) 风格一致；对非 null
+        // te 与 isAssignableFrom(te.getClass()) 语义等价。
+        return generatorAvailable && generatorClass.isInstance(te);
     }
 
     /** 是否正有被加速的 Mek 机器（全局短路入口：计数为 0 时 mixin 可直接跳过查表）。 */
