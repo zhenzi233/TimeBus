@@ -199,6 +199,8 @@ public class TimeBusConfig {
             refreshIfFileChanged();
             if (cachedBusFilter == null) {
                 cachedBusFilter = new BlockListFilter(busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
+                LOGGER.info("Time Bus: bus block list filter rebuilt (enabled={}, whitelist={}, list='{}')",
+                        busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
             }
             return cachedBusFilter;
         }
@@ -693,21 +695,28 @@ public class TimeBusConfig {
                             : f.getName();
                     final Class<?> t = f.getType();
                     try {
+                        final net.minecraftforge.common.config.ConfigCategory cat = cfg.getCategory(category);
                         final net.minecraftforge.common.config.Property prop;
                         if (t == boolean.class) {
-                            prop = cfg.get(category, key, false, null);
+                            // 已存在直接取（不动 comment/默认值），不存在才创建（默认 false）。
+                            prop = cat.containsKey(key) ? cat.get(key)
+                                    : cfg.get(category, key, false, null);
                             f.setBoolean(null, prop.getBoolean());
                         } else if (t == int.class) {
-                            prop = cfg.get(category, key, 0, null);
+                            prop = cat.containsKey(key) ? cat.get(key)
+                                    : cfg.get(category, key, 0, null);
                             f.setInt(null, prop.getInt());
                         } else if (t == double.class) {
-                            prop = cfg.get(category, key, 0.0, null);
+                            prop = cat.containsKey(key) ? cat.get(key)
+                                    : cfg.get(category, key, 0.0, null);
                             f.setDouble(null, prop.getDouble());
                         } else if (t == String.class) {
-                            prop = cfg.get(category, key, "", null);
+                            prop = cat.containsKey(key) ? cat.get(key)
+                                    : cfg.get(category, key, "", null);
                             f.set(null, prop.getString());
                         } else if (t.isEnum()) {
-                            prop = cfg.get(category, key, "", null);
+                            prop = cat.containsKey(key) ? cat.get(key)
+                                    : cfg.get(category, key, "", null);
                             f.set(null, Enum.valueOf((Class<Enum>) t, prop.getString()));
                         } else {
                             continue; // 其他类型（数组/对象等）不参与
@@ -744,6 +753,8 @@ public class TimeBusConfig {
                 }
                 forceSyncFromConfig();
                 invalidateCaches();
+                LOGGER.info("Time Bus: config changed -> synced (busListEnabled={}, busListMode={}, busBlockList='{}')",
+                        Bus.busListEnabled, Bus.busListMode, Bus.busBlockList);
             }
         }
     }
