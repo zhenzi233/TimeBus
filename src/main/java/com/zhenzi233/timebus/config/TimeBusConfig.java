@@ -196,6 +196,7 @@ public class TimeBusConfig {
 
         /** 时间总线黑白名单（enabled/mode/list 解析一次并缓存，onConfigChanged 失效）。 */
         public static BlockListFilter getBusFilter() {
+            refreshIfFileChanged();
             if (cachedBusFilter == null) {
                 cachedBusFilter = new BlockListFilter(busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
             }
@@ -594,6 +595,7 @@ public class TimeBusConfig {
 
         /** 减速总线黑白名单（enabled/mode/list 解析一次并缓存，onConfigChanged 失效）。 */
         public static BlockListFilter getSlowBusFilter() {
+            refreshIfFileChanged();
             if (cachedSlowBusFilter == null) {
                 cachedSlowBusFilter = new BlockListFilter(slowBusListEnabled,
                         slowBusListMode == ListMode.WHITELIST, slowBusBlockList);
@@ -603,15 +605,55 @@ public class TimeBusConfig {
     }
 
     /** ConfigManager.getConfiguration 是包私有方法，通过反射获取当前 cfg 实例。 */
+    private static java.lang.reflect.Method cachedGetConfigMethod = null;
+
     private static net.minecraftforge.common.config.Configuration getConfigInstance() {
         try {
-            final java.lang.reflect.Method m = Class.forName("net.minecraftforge.common.config.ConfigManager")
-                    .getDeclaredMethod("getConfiguration", String.class, String.class);
-            m.setAccessible(true);
-            return (net.minecraftforge.common.config.Configuration) m.invoke(null, TimeBus.MOD_ID, "timebus");
+            if (cachedGetConfigMethod == null) {
+                cachedGetConfigMethod = Class.forName("net.minecraftforge.common.config.ConfigManager")
+                        .getDeclaredMethod("getConfiguration", String.class, String.class);
+                cachedGetConfigMethod.setAccessible(true);
+            }
+            return (net.minecraftforge.common.config.Configuration) cachedGetConfigMethod.invoke(null, TimeBus.MOD_ID, "timebus");
         } catch (Exception e) {
-            LOGGER.warn("Time Bus: cannot resolve config instance for comment localization: {}", e.toString());
+            LOGGER.warn("Time Bus: cannot resolve config instance: {}", e.toString());
             return null;
+        }
+    }
+
+    // --- cfg 文件热重载（手动编辑文件无需重启即可生效） ---
+    // Forge 1.12.2 @Config 的 GUI 保存链路在部分环境（Cleanroom fork / 多 @Config 类
+    // 共享单文件）下不可靠：GUI 保存后字段/界面可能与磁盘脱节。这里兜底：检测
+    // cfg 文件 mtime 变化 → 从磁盘重读 Configuration → 同步静态字段 → 失效缓存，
+    // 玩家直接改文件（或 GUI 保存成功但内存未同步）后 1 秒内生效，无需重启。
+    private static long lastCfgCheckTime = 0;
+    private static long lastCfgMtime = -1;
+
+    private static void refreshIfFileChanged() {
+        final long now = System.currentTimeMillis();
+        if (now - lastCfgCheckTime < 1000) {
+            return; // 节流：最多每秒 stat 一次文件
+        }
+        lastCfgCheckTime = now;
+        try {
+            final net.minecraftforge.common.config.Configuration cfg = getConfigInstance();
+            if (cfg == null) {
+                return;
+            }
+            final long mtime = cfg.getConfigFile().lastModified();
+            if (lastCfgMtime < 0) {
+                lastCfgMtime = mtime;
+                return; // 首次记录基线
+            }
+            if (mtime != lastCfgMtime) {
+                lastCfgMtime = mtime;
+                cfg.load(); // 从磁盘重读（恢复与文件的脱节）
+                ConfigManager.sync(TimeBus.MOD_ID, Config.Type.INSTANCE); // 字段 ← Configuration
+                invalidateCaches();
+                LOGGER.info("Time Bus: config file changed on disk, reloaded.");
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Time Bus: config refresh check failed: {}", e.toString());
         }
     }
 
