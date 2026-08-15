@@ -32,3 +32,9 @@ gradle-app.setting
 # Local-only files (kept locally, not uploaded)
 MCMOD_CN.md
 time_bus_base.blockbench.bak
+
+# CurseForge 发布脚本的 npm 依赖（gradle/scripts 下 node modules）
+node_modules/
+gradle/scripts/node_modules/
+gradle/scripts/package.json
+gradle/scripts/package-lock.json
