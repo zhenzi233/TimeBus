@@ -194,12 +194,21 @@ public class TimeBusConfig {
             return cachedCapacityWidths;
         }
 
-        /** 时间总线黑白名单（enabled/mode/list 解析一次并缓存，onConfigChanged 失效）。 */
+        /**
+         * 时间总线黑白名单：enabled/mode/list 解析一次并缓存。
+         *
+         * <p>缓存自校验：每次调用比对字段与缓存的一致性（enabled/mode/list 任一
+         * 变化即重建），不依赖 onConfigChanged/reload 事件触发 invalidateCaches——
+         * 后者在部分环境（如 cachedBusFilter 于启动早期字段未定稿时构建）会留下
+         * 与字段脱节的旧 filter，导致名单开关不生效。
+         */
         public static BlockListFilter getBusFilter() {
             refreshIfFileChanged();
-            if (cachedBusFilter == null) {
+            if (cachedBusFilter == null || cachedBusFilter.isEnabled() != busListEnabled
+                    || cachedBusFilter.isWhitelist() != (busListMode == ListMode.WHITELIST)
+                    || !cachedBusFilter.getRawList().equals(busBlockList == null ? "" : busBlockList)) {
                 cachedBusFilter = new BlockListFilter(busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
-                LOGGER.debug("Time Bus: bus block list filter rebuilt (enabled={}, whitelist={}, list='{}')",
+                LOGGER.info("Time Bus: bus block list filter rebuilt (enabled={}, whitelist={}, list='{}')",
                         busListEnabled, busListMode == ListMode.WHITELIST, busBlockList);
             }
             return cachedBusFilter;
@@ -595,12 +604,16 @@ public class TimeBusConfig {
             return cachedSlowdownMultipliers;
         }
 
-        /** 减速总线黑白名单（enabled/mode/list 解析一次并缓存，onConfigChanged 失效）。 */
+        /** 减速总线黑白名单（同 getBusFilter：缓存自校验，字段变化即重建）。 */
         public static BlockListFilter getSlowBusFilter() {
             refreshIfFileChanged();
-            if (cachedSlowBusFilter == null) {
+            if (cachedSlowBusFilter == null || cachedSlowBusFilter.isEnabled() != slowBusListEnabled
+                    || cachedSlowBusFilter.isWhitelist() != (slowBusListMode == ListMode.WHITELIST)
+                    || !cachedSlowBusFilter.getRawList().equals(slowBusBlockList == null ? "" : slowBusBlockList)) {
                 cachedSlowBusFilter = new BlockListFilter(slowBusListEnabled,
                         slowBusListMode == ListMode.WHITELIST, slowBusBlockList);
+                LOGGER.info("Time Bus: slow bus block list filter rebuilt (enabled={}, whitelist={}, list='{}')",
+                        slowBusListEnabled, slowBusListMode == ListMode.WHITELIST, slowBusBlockList);
             }
             return cachedSlowBusFilter;
         }

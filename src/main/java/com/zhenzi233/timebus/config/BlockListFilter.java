@@ -21,12 +21,29 @@ public final class BlockListFilter {
 
     private final boolean enabled;
     private final boolean whitelist;
+    private final String rawList;
     private final List<String> patterns;
 
     public BlockListFilter(final boolean enabled, final boolean whitelist, final String rawList) {
         this.enabled = enabled;
         this.whitelist = whitelist;
-        this.patterns = parse(rawList);
+        this.rawList = rawList == null ? "" : rawList;
+        this.patterns = parse(this.rawList);
+    }
+
+    /** 是否启用（供缓存自校验：字段变化时据此判断是否需要重建）。 */
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    /** 是否为白名单模式（供缓存自校验）。 */
+    public boolean isWhitelist() {
+        return whitelist;
+    }
+
+    /** 原始列表字符串（供缓存自校验：列表内容变化时重建）。 */
+    public String getRawList() {
+        return rawList;
     }
 
     /** 判定：{@code registryName} 形如 {@code "modid:name"}（可单测）。 */
