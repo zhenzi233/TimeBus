@@ -110,6 +110,23 @@ class BlockListFilterTest {
     // --- 模式切换联动 ---
 
     @Test
+    void litVariantMatchesBaseBlock() {
+        // 熔炉点燃后注册名变为 minecraft:lit_furnace，名单写 furnace 应同样命中。
+        final BlockListFilter f = new BlockListFilter(true, false, "minecraft:furnace");
+        assertFalse(f.allows("minecraft:furnace"), "未点燃熔炉命中");
+        assertFalse(f.allows("minecraft:lit_furnace"), "点燃熔炉（lit 变体）也应命中");
+        assertTrue(f.allows("minecraft:lit_redstone_lamp"), "非名单基础方块的 lit 变体不应误伤");
+        assertTrue(f.allows("minecraft:chest"), "无关方块放行");
+    }
+
+    @Test
+    void litVariantWorksInWhitelist() {
+        final BlockListFilter f = new BlockListFilter(true, true, "minecraft:furnace");
+        assertTrue(f.allows("minecraft:lit_furnace"), "白名单下 lit 变体也应放行");
+        assertFalse(f.allows("minecraft:hopper"), "白名单外仍禁止");
+    }
+
+    @Test
     void sameListDifferentModeGivesOppositeResults() {
         final BlockListFilter black = new BlockListFilter(true, false, "minecraft:furnace");
         final BlockListFilter white = new BlockListFilter(true, true, "minecraft:furnace");

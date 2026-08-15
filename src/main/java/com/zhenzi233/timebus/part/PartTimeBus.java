@@ -440,7 +440,7 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     final net.minecraft.util.ResourceLocation blockRl = targetBlock.getRegistryName();
                     if (blockRl == null || !TimeBusConfig.Bus.getBusFilter().allows(blockRl.toString())) {
                         if (blockRl != null) {
-                            TimeBus.LOGGER.info("Time Bus: block list blocked {} at {}", blockRl, target);
+                            TimeBus.LOGGER.debug("Time Bus: block list blocked {} at {}", blockRl, target);
                         }
                         workBlockIndex++;
                         workPhase = PHASE_SCHEDULE;
@@ -475,7 +475,6 @@ public class PartTimeBus extends PartUpgradeable implements IGridTickable {
                     // 否则名单开启瞬间 PHASE_TILE 残留会继续连拍当前方块。
                     final net.minecraft.util.ResourceLocation tileRl = targetBlock.getRegistryName();
                     if (tileRl == null || !TimeBusConfig.Bus.getBusFilter().allows(tileRl.toString())) {
-                        TimeBus.LOGGER.info("Time Bus: PHASE_TILE recheck blocked {} at {}", tileRl, target);
                         workBlockIndex++;
                         workPhase = PHASE_SCHEDULE;
                         workPhaseRemaining = 0;

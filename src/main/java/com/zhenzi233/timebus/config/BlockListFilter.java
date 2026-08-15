@@ -68,6 +68,18 @@ public final class BlockListFilter {
                 return true;
             }
         }
+        // lit 变体：minecraft:lit_furnace 是 minecraft:furnace 的点燃状态（熔炉点燃
+        // 后方块注册名改变），名单写 furnace 时应同样命中 lit_furnace。通用处理
+        // 任意 "modid:lit_xxx" → "modid:xxx"（原版熔炉/红石矿等同类方块）。
+        final int litIdx = registryName.indexOf(":lit_");
+        if (litIdx >= 0) {
+            final String base = registryName.substring(0, litIdx + 1) + registryName.substring(litIdx + 5);
+            for (final String pattern : patterns) {
+                if (pattern.equals(base)) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 

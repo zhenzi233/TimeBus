@@ -325,11 +325,6 @@ public final class AccelerateHelper {
 
             case ITICKABLE: {
                 final net.minecraft.util.ITickable tickable = (net.minecraft.util.ITickable) targetTE;
-                TimeBus.LOGGER.info("Time Bus: ITICKABLE update x{} at {} source={} (filter: busEnabled={}, mode={}, list='{}')",
-                        calls, target, sourceKey,
-                        com.zhenzi233.timebus.config.TimeBusConfig.Bus.busListEnabled,
-                        com.zhenzi233.timebus.config.TimeBusConfig.Bus.busListMode,
-                        com.zhenzi233.timebus.config.TimeBusConfig.Bus.busBlockList);
                 int ran = 0;
                 for (int i = 0; i < calls; i++) {
                     try {
