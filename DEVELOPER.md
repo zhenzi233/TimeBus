@@ -224,7 +224,7 @@ Forge 1.12.2 `@Config` 按功能分类组织（嵌套静态类），cfg 键带�
 - 构建环境：Gradle 由 `JAVA_HOME`（建议 JDK 17）运行；编译 toolchain 需要 JDK 25，两种注册方式任选：设环境变量 `JDK25`（项目 `gradle.properties` 已启用 `org.gradle.java.installations.fromEnv=JDK25`），或在 `%USERPROFILE%\.gradle\gradle.properties` 写 `org.gradle.java.installations.paths=...`（个人配置，不入库）；不要在本仓库的 gradle.properties 写死本机路径
 - 构建：`gradlew build`（产物在 `build/libs/timebus-1.0.0.jar`）
 - 依赖：AE2 UEL（`curse.maven:ae2-extended-life-570458:6302098`）、JEI、The One Probe
-- 依赖（运行期软依赖）：MMCE（`curse.maven:modularmachinery-community-edition-817377:7372951`，modRuntimeOnly，纯反射调用）
+- 依赖（运行期软依赖）：MMCE（`curse.maven:modularmachinery-community-edition-817377:7372951`，modRuntimeOnly，纯反射调用）；MMCE 硬依赖 CraftTweaker≥4.0.4，dev 加载 MMCE 时必须同时带上 `curse.maven:crafttweaker-239197:8051578`（modRuntimeOnly，FMLAT 已合并进 timebus_at.cfg）
 - 注意：Cleanroom 的方法名与 MCP 不同（如 `Block.onEntityCollision` 而非 `onEntityCollidedWithBlock`），改动前先在 `F:\AiWork\Mcmod\Git`（AE2 UEL 源码 git 克隆）或运行时 jar 里确认签名
 
 ### 常见坑

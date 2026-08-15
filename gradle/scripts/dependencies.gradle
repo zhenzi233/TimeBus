@@ -33,6 +33,9 @@ dependencies {
     // 编译期引用仅用于让 Mixin 注解处理器校验 targets（不打包、不强制运行时依赖）。
     modCompileOnly "curse.maven:modularmachinery-community-edition-817377:7372951"
     modRuntimeOnly "curse.maven:modularmachinery-community-edition-817377:7372951"
+    // MMCE 硬依赖 CraftTweaker>=4.0.4；dev 环境要加载 MMCE 就必须带上它，
+    // 其 FMLAT 条目已合并进 timebus_at.cfg（见 src/main/resources/timebus_at.cfg）。
+    modRuntimeOnly "curse.maven:crafttweaker-239197:8051578"
     // Mekanism CE-Unofficial (CurseForge 840735) - 运行期软依赖（虚拟速度卡 Mixin）；
     // 编译期引用仅用于让 Mixin 注解处理器校验 targets（不打包、不强制运行时依赖）。
     modCompileOnly "curse.maven:mekanism-ce-unofficial-840735:8519677"
