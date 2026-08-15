@@ -2,6 +2,28 @@
 
 > 说明：本仓库自 v1.0.4 起维护 CHANGELOG；更早版本（v1.0.0–v1.0.3）为开发期版本，未收录变更记录。
 
+## v1.0.16
+
+- Feature: **时间总线/减速总线黑白名单**——两条总线各自独立配置（`bus` / `slowBus`
+  分类各一套）：按方块注册名过滤加速/减速目标（仅匹配方块本身、无视 NBT），支持
+  `modid:*` 通配、裸名自动补 `minecraft:`、**lit 变体匹配**（熔炉点燃后
+  `minecraft:lit_furnace` 同样命中名单）；`BLACKLIST`（名单内禁止）/ `WHITELIST`
+  （仅名单内允许）两种模式 + 总开关；时间杖不受名单影响。新增
+  `Block List Enabled` / `Block List Mode` / `Block List` 配置项（中英双语）
+- Fix: Forge 1.12.2 配置 GUI 保存不生效（Cleanroom 环境 / 多 @Config 类共享单文件
+  时 `shouldReadFromVar` 方向判定反向覆盖 GUI 修改）——配置同步改为**无条件
+  Configuration→字段**（参考 Mekanism 方案），GUI 保存即时生效；新增 **cfg 文件
+  热重载**——直接改 `timebus.cfg` 1 秒内生效，无需重启
+- Fix: 黑白名单开启时名单外**随机刻方块**（作物/草蔓延/冰融化等）不再被随机刻
+  加速（名单外方块整块跳过，不进 PHASE_RANDOM）
+- Fix: 名单开启瞬间 PHASE_TILE 跨 tick 残留连拍——PHASE_TILE / PHASE_RANDOM
+  进入时复查名单；名单 filter 缓存自校验（字段变化立即重建，不依赖事件失效）
+- Perf: 减速 mixin / Mek 加速查询**全局短路**（全服无减速总线/无加速 Mek 机器时，
+  热路径退化为一次 volatile 读，零同步查表）
+- Perf: tile 分类结果缓存 + doWork 分类复用（同一 tick 不再重复走 instanceof 分类链）
+- Perf: 流体耗尽退避（每 10 tick 才重试探测一次）、生成器缓存 AEApi materials 引用、
+  减速总线空范围退避（前方无 ITickable 目标时降频扫描）
+
 ## v1.0.15 (beta)
 
 - Feature: **时间减速总线（Time Slow Bus）**——新的 AE2 线缆部件，让时间"变慢"：

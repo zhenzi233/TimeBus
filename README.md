@@ -21,6 +21,7 @@ An **Applied Energistics 2** addon for Minecraft 1.12.2 (CleanroomLoader) center
   - **AE power** (default): draws AE energy from the ME network while accelerating.
   - **Fluid mode** (configurable): consumes a fluid from the ME network instead (bundled with the `time_fluid`, or any registered fluid).
 - **Performance-safe**: each bus has its own work budget (`maxCallsPerTick`, default 128 acceleration calls per tick). The budget is **per bus, not global** - N buses can issue up to N x 128 calls/tick - and excess work carries over to the next tick, so a fully-upgraded bus never spikes a single tick.
+- **Block list** (configurable): filter acceleration targets by block registry name (ignores NBT) - `BLACKLIST` never accelerates listed blocks / `WHITELIST` only accelerates listed ones; supports `modid:*` wildcards and lit variants (a lit furnace matches a `minecraft:furnace` entry); `bus.Block List Enabled / Mode / List`, takes effect immediately via GUI save or direct cfg-file edit (hot-reload).
 - **GUI**: shows current speed, range, power draw, and live work-budget usage.
 
 #### What one acceleration burst does
