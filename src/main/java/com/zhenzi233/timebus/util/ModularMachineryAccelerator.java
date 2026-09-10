@@ -7,18 +7,11 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
-import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Modular Machinery (CE) recipe-duration accelerator.
@@ -38,9 +31,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * multiplier per thread (so a config change re-applies the new value).
  *
  * <p>加速来源分两条追踪路径：总线每 tick 注入的 permanent modifier 登记在
- * {@link #INJECTED}（断电/拆除/卸载时恢复）；魔杖注入的 semi-permanent
- * 配方加速登记在 {@link #SEMI_INJECTED}（配方完成由 MM 自动清空，拆机/卸载/
- * 关服由兜底清理摘除）。两张表都随世界弱引用，卸载后自动消失。
+ * {@link MMTracking}（源消失时按源恢复，断电/拆除/卸载均覆盖）；魔杖注入的
+ * semi-permanent 配方加速同样登记追踪，配方完成由 MM 自动清空，拆机/卸载/关服
+ * 由兜底清理摘除。两张表都随世界弱引用，卸载后自动消失。
+ *
+ * <p>实现拆分为三个包内类：{@link MMReflection}（反射句柄解析与缓存）、
+ * {@link MMTracking}（四张状态追踪表）、{@link MMModifiers}（modifier key 与幂等增删）；
+ * 本类只保留公开 API 与加速策略编排。
  *
  * <p>All access goes through reflection (MM is an optional mod; Time Bus has
  * no hard dependency). If the classes are absent or signatures change, the
@@ -51,16 +48,10 @@ public final class ModularMachineryAccelerator {
     private ModularMachineryAccelerator() {
     }
 
-    /** Modifier key prefix for the duration compression (namespaced to avoid collisions). */
-    private static final String MODIFIER_KEY_PREFIX = "timebus_duration_accel";
-    /** Modifier key prefix for the energy consumption/production scaling. */
-    private static final String ENERGY_KEY_PREFIX = "timebus_energy_accel";
-
     /** 加速来源前缀：Time Bus 部件（"bus:x,y,z:SIDE"）。 */
     public static final String SOURCE_BUS_PREFIX = "bus:";
     /** 加速来源前缀：Time Wand（"wand:playerUUID"）。 */
     public static final String SOURCE_WAND_PREFIX = "wand:";
-
     /**
      * MM 配方时长加速的等效倍率上限。
      *
@@ -71,7 +62,6 @@ public final class ModularMachineryAccelerator {
      * 是安全上限；能耗 modifier 与时长共用同一有效倍率，保证单次配方总耗电守恒。
      */
     private static final int MAX_MM_EFFECTIVE_SPEED = 32;
-
     /**
      * 来源标识是否来自时间杖：总线走每 tick 注入路径，魔杖走 semi-permanent
      * 配方加速路径（配方完成自动恢复）。判定收拢到一处，避免各处裸字符串前缀。
@@ -80,110 +70,13 @@ public final class ModularMachineryAccelerator {
         return sourceKey != null && sourceKey.startsWith(SOURCE_WAND_PREFIX);
     }
 
-    /**
-     * Remembers which source (Time Bus part / wand) injected a duration modifier
-     * on which controller, so {@link #restoreAllForSource} can clean up when a
-     * source disappears (e.g. a Time Bus is removed from the world). Without
-     * this, injected modifiers would stay on machines forever and even be
-     * written into the world save. World keys are weak references: entries go
-     * away automatically when the World unloads.
-     */
-    private static final Map<World, Map<BlockPos, Set<String>>> INJECTED = new WeakHashMap<>();
-
-    /**
-     * 魔杖注入的 semi-permanent modifier 追踪（独立于 {@link #INJECTED}）。
-     *
-     * <p>魔杖的配方加速写入 {@code RecipeThread.semiPermanentModifiers}，MM 在
-     * 配方完成/失败时自动清空整表，正常路径无需干预；但配方中途拆机、区块卸载
-     * 或关服时 MM 的自动清空不会触发，加速状态可能随存档残留，因此单独登记，由
-     * {@link #restoreAllForWorld}/{@link #restoreAllForChunk}/{@link #restoreAll}
-     * 兜底清理。
-     *
-     * <p>不复用 INJECTED：{@link #isAccelerated}（工厂线程回收 Mixin 的判定）
-     * 只应反映持续注入的总线来源——魔杖是瞬时配方级加速，配方完成后线程理应
-     * 正常回收，若混入同一张表会导致空闲线程被长期保留。
-     */
-    private static final Map<World, Map<BlockPos, Set<String>>> SEMI_INJECTED = new WeakHashMap<>();
-
-    /**
-     * 记录每个控制器上次"强制刷新"的世界 tick。
-     *
-     * <p>MM 的 context 是池化的：{@code setContext()} 会把旧 context 归还
-     * {@code RecipeCraftingContextPool}，新 context 是 reset 过的空状态。
-     * 此时线程的 permanentModifiers 数据源仍持有我们的 modifier（幂等检查
-     * 通过），但实际应用的 context 已丢失 —— 只有重新写入 modifier 触发
-     * {@code flushContextModifier()} 才会把 permanent 刷回 context。因此
-     * 按配置的 mmContextRefreshInterval（0 = 关闭）周期性无条件重注入，
-     * 保证 context 脱节后最多一个间隔内自愈。
-     */
-    private static final Map<World, Map<BlockPos, Long>> LAST_FORCE_REFRESH = new WeakHashMap<>();
-
-    /**
-     * 每个 (world, pos, sourceKey) 上次成功注入的加速状态快照。
-     *
-     * <p>稳态下（倍率未变、能耗守恒开关未变、未到强制刷新周期）直接跳过整轮
-     * 反射巡检，把每 tick 的 MM 开销降为零（代码审查 3.1）。正确性由两点兜底：
-     * 1) {@link #shouldForceRefresh} 按 mmContextRefreshInterval 周期强制重走反射
-     * 路径（context 池化脱节自愈）；2) 倍率 / 能耗配置变化会使快照失配，自动重走。
-     */
-    private static final Map<World, Map<BlockPos, Map<String, AppliedState>>> APPLIED = new WeakHashMap<>();
-
-    /** 已注入状态快照（{@link #APPLIED} 的值）。 */
-    private static final class AppliedState {
-        final int speed;
-        final boolean energyFollows;
-
-        AppliedState(final int speed, final boolean energyFollows) {
-            this.speed = speed;
-            this.energyFollows = energyFollows;
-        }
-    }
-
-    private static volatile boolean resolved;
-    private static volatile boolean available;
-
-    private static volatile Class<?> controllerClass;
-    /**
-     * getRecipeThreadList is declared separately on the concrete controller
-     * classes (TileMachineController and TileFactoryController), not on the
-     * shared base, so it must be resolved from the actual tile class at
-     * runtime and cached per class.
-     */
-    private static final Map<Class<?>, Method> GET_RECIPE_THREAD_LIST = new ConcurrentHashMap<>();
-    private static volatile Method getPermanentModifiers;
-    private static volatile Method getModifier;
-    private static volatile Method addPermanentModifier;
-    private static volatile Method removePermanentModifier;
-    private static volatile Method getSemiPermanentModifiers;
-    private static volatile Method addModifier;
-    private static volatile Method removeModifier;
-    private static volatile Method getActiveRecipe;
-    private static volatile Constructor<?> recipeModifierCtor;
-    private static volatile Object ioInput;
-    private static volatile Object ioOutput;
-    private static volatile int operationMultiply;
-    /**
-     * 配方时长 modifier 的 target（RequirementTypesMM.REQUIREMENT_DURATION）。
-     * MM 计算 totalTick 时按该 target 查找 modifier（ActiveMachineRecipe.tick），
-     * 传 null 或其它类型都不会命中；同时该 target 已注册，序列化/同步时才
-     * 不会产生空注册名导致客户端反序列化崩溃。
-     */
-    private static volatile Object recipeDurationType;
-    /**
-     * 能耗 modifier 的 target（RequirementTypesMM.REQUIREMENT_ENERGY）。
-     * MM 的 RequirementEnergy.deepCopyModified() 按该 target + IOType 匹配
-     * modifier：input 放大机器每 tick 消耗，output 放大机器每 tick 产出，
-     * 使加速后单次配方总耗电/总产出守恒。
-     */
-    private static volatile Object recipeEnergyType;
-
     /** True if the tile is an MM (CE) multiblock machine controller. */
     public static boolean isController(final TileEntity te) {
         if (te == null) {
             return false;
         }
-        resolve();
-        return available && controllerClass.isInstance(te);
+        final MMReflection.Handles handles = MMReflection.handles();
+        return handles != null && handles.controllerClass.isInstance(te);
     }
 
     /**
@@ -207,25 +100,25 @@ public final class ModularMachineryAccelerator {
         if (te == null || accelerate <= 1) {
             return false;
         }
-        resolve();
-        if (!available) {
+        final MMReflection.Handles handles = MMReflection.handles();
+        if (handles == null) {
             return false;
         }
-        final String durationKey = keyFor(sourceKey);
-        final String energyInKey = keyForEnergyIn(sourceKey);
-        final String energyOutKey = keyForEnergyOut(sourceKey);
+        final String durationKey = MMModifiers.durationKey(sourceKey);
+        final String energyInKey = MMModifiers.energyInKey(sourceKey);
+        final String energyOutKey = MMModifiers.energyOutKey(sourceKey);
         // 有效倍率封顶:防叠加/极端配置把配方时长压到取整为 0/1 tick(见常量注释)。
         final int effectiveSpeed = Math.min(accelerate, MAX_MM_EFFECTIVE_SPEED);
         final float durationTarget = 1.0f / effectiveSpeed;
         final boolean scaleEnergy = TimeBusConfig.MM.mmEnergyFollowsSpeed;
-        final boolean forceRefresh = shouldForceRefresh(te);
+        final boolean forceRefresh = MMTracking.shouldForceRefresh(te, TimeBusConfig.MM.mmContextRefreshInterval);
         // 稳态快路径：状态未变且未到强制刷新周期时跳过整轮反射巡检。
-        if (!forceRefresh && isAppliedState(te, sourceKey, effectiveSpeed, scaleEnergy)) {
+        if (!forceRefresh && MMTracking.isAppliedState(te, sourceKey, effectiveSpeed, scaleEnergy)) {
             return false;
         }
         boolean touched = false;
         try {
-            final Method threadsGetter = getRecipeThreadListFor(te);
+            final Method threadsGetter = MMReflection.getRecipeThreadListFor(te);
             if (threadsGetter == null) {
                 return false;
             }
@@ -246,32 +139,35 @@ public final class ModularMachineryAccelerator {
                 }
                 // 升级迁移：清除旧版总线（无 side）与旧版魔杖 permanent modifier，
                 // 避免残留与新的 semi-permanent 连乘导致进度瞬间完成。
-                purgeLegacyTimeBusKeys(thread);
+                MMModifiers.purgeLegacy(handles, thread);
                 // 配方时长压缩：x 1/speed
-                if (ensureModifier(thread, durationKey, recipeDurationType, ioInput, durationTarget, forceRefresh)) {
+                if (MMModifiers.ensurePermanent(handles, thread, durationKey,
+                                handles.recipeDurationType, handles.ioInput, durationTarget, forceRefresh)) {
                     touched = true;
                 }
                 if (scaleEnergy) {
                     // 能耗守恒：input（消耗）与 output（产出）都 x effectiveSpeed，
                     // 与时长压缩相抵，单次配方总耗电/总产出不变。
-                    if (ensureModifier(thread, energyInKey, recipeEnergyType, ioInput, effectiveSpeed, forceRefresh)) {
+                    if (MMModifiers.ensurePermanent(handles, thread, energyInKey,
+                                handles.recipeEnergyType, handles.ioInput, effectiveSpeed, forceRefresh)) {
                         touched = true;
                     }
-                    if (ensureModifier(thread, energyOutKey, recipeEnergyType, ioOutput, effectiveSpeed, forceRefresh)) {
+                    if (MMModifiers.ensurePermanent(handles, thread, energyOutKey,
+                                handles.recipeEnergyType, handles.ioOutput, effectiveSpeed, forceRefresh)) {
                         touched = true;
                     }
                 } else {
                     // 配置关闭：摘掉旧的能耗 modifier（若之前开过）。
-                    removeEnergyModifiers(thread, energyInKey, energyOutKey);
+                    MMModifiers.removeEnergy(handles, thread, energyInKey, energyOutKey);
                 }
             }
             if (touched) {
-                rememberInjected(te, sourceKey);
+                MMTracking.rememberInjected(te, sourceKey);
                 TimeBus.LOGGER.info("Time Bus: MM applied source={} speed={} at {} ({} threads, tile {})",
                         sourceKey, effectiveSpeed, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
             // 无论本轮是否实际改动，都刷新快照，使后续 tick 可走快路径。
-            rememberApplied(te, sourceKey, effectiveSpeed, scaleEnergy);
+            MMTracking.rememberApplied(te, sourceKey, effectiveSpeed, scaleEnergy);
             return touched;
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: MM acceleration failed at {}: {}", te.getPos(), e.toString());
@@ -279,143 +175,20 @@ public final class ModularMachineryAccelerator {
         }
     }
 
-    /**
-     * Resolve getRecipeThreadList from the actual tile class, walking up the
-     * hierarchy until a declaration is found (TileMachineController and
-     * TileFactoryController each declare their own copy).
-     */
-    private static Method getRecipeThreadListFor(final TileEntity te) {
-        if (te == null) {
-            return null;
-        }
-        return GET_RECIPE_THREAD_LIST.computeIfAbsent(te.getClass(), clazz -> {
-            Class<?> current = clazz;
-            while (current != null) {
-                try {
-                    return current.getDeclaredMethod("getRecipeThreadList");
-                } catch (NoSuchMethodException e) {
-                    current = current.getSuperclass();
-                }
-            }
-            return null;
-        });
-    }
-
-    /**
-     * 确保线程的 permanentModifiers 里 {@code key} 的 modifier 恰好为
-     * {@code value}（按 targetType/ioTarget 构造）。已存在且值相同则跳过，
-     * 否则替换该 key 的 modifier。
-     *
-     * <p>{@code forceRefresh} 时即使值相同也重新 remove+add，触发
-     * {@code flushContextModifier()} 把 permanent 刷回当前 context（MM 的
-     * context 池化复用可能让实际应用状态与数据源脱节）。
-     *
-     * @return true 表示数据源的值发生了实际变化（用于日志/记录）
-     */
-    private static boolean ensureModifier(final Object thread, final String key,
-                                          final Object targetType, final Object ioTarget,
-                                          final float value, final boolean forceRefresh) throws Exception {
-        final boolean exact = hasExactModifier(thread, key, value);
-        if (exact && !forceRefresh) {
-            return false;
-        }
-        removePermanentModifier.invoke(thread, key);
-        final Object modifier = recipeModifierCtor.newInstance(targetType, ioTarget,
-                value, operationMultiply, false);
-        addPermanentModifier.invoke(thread, key, modifier);
-        return !exact;
-    }
-
-    /** 距上次强制刷新是否已达到配置的间隔（达到则记录本次并返回 true；间隔 0 = 关闭）。 */
-    private static boolean shouldForceRefresh(final TileEntity te) {
-        if (te == null || te.getWorld() == null) {
-            return false;
-        }
-        final int interval = TimeBusConfig.MM.mmContextRefreshInterval;
-        if (interval <= 0) {
-            return false;
-        }
-        final long now = te.getWorld().getTotalWorldTime();
-        synchronized (LAST_FORCE_REFRESH) {
-            final Map<BlockPos, Long> byPos = LAST_FORCE_REFRESH.get(te.getWorld());
-            final Long last = byPos == null ? null : byPos.get(te.getPos());
-            if (last != null && now - last < interval) {
-                return false;
-            }
-            LAST_FORCE_REFRESH.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
-                    .put(te.getPos(), now);
-            return true;
-        }
-    }
-
-    /** 移除能耗 modifier（配置关闭时清理残留）。 */
-    private static void removeEnergyModifiers(final Object thread, final String energyInKey,
-                                              final String energyOutKey) throws Exception {
-        removePermanentModifier.invoke(thread, energyInKey);
-        removePermanentModifier.invoke(thread, energyOutKey);
-    }
-
-    /** True if {@code thread} already carries exactly {@code target} under {@code key}. */
-    private static boolean hasExactModifier(final Object thread, final String key, final float target) throws Exception {
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> permanent = (Map<String, Object>) getPermanentModifiers.invoke(thread);
-        final Object existing = permanent.get(key);
-        return existing != null && Math.abs((Float) getModifier.invoke(existing) - target) < 1e-4f;
-    }
-
-    /**
-     * 确保线程的 semiPermanentModifiers 里 {@code key} 的 modifier 恰好为
-     * {@code value}（配方专用，配方完成后 MM 自动清空整表）。已存在且值相同则
-     * 跳过，否则替换该 key。add/removeModifier 内部自带 flushContextModifier，
-     * 修改立即应用到当前 context。
-     */
-    private static boolean ensureSemiModifier(final Object thread, final String key,
-                                              final Object targetType, final Object ioTarget,
-                                              final float value) throws Exception {
-        final boolean exact = hasExactSemiModifier(thread, key, value);
-        if (exact) {
-            return false;
-        }
-        removeModifier.invoke(thread, key);
-        final Object modifier = recipeModifierCtor.newInstance(targetType, ioTarget,
-                value, operationMultiply, false);
-        addModifier.invoke(thread, key, modifier);
-        return true;
-    }
-
-    private static boolean hasExactSemiModifier(final Object thread, final String key, final float target) throws Exception {
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> semi = (Map<String, Object>) getSemiPermanentModifiers.invoke(thread);
-        final Object existing = semi.get(key);
-        return existing != null && Math.abs((Float) getModifier.invoke(existing) - target) < 1e-4f;
-    }
-
-    private static String keyFor(final String sourceKey) {
-        return MODIFIER_KEY_PREFIX + ":" + (sourceKey == null ? "unknown" : sourceKey);
-    }
-
-    private static String keyForEnergyIn(final String sourceKey) {
-        return ENERGY_KEY_PREFIX + ":in:" + (sourceKey == null ? "unknown" : sourceKey);
-    }
-
-    private static String keyForEnergyOut(final String sourceKey) {
-        return ENERGY_KEY_PREFIX + ":out:" + (sourceKey == null ? "unknown" : sourceKey);
-    }
-
     /** Remove this source's injected modifier again (immediate restore of the original duration). */
     public static void restore(final TileEntity te, final String sourceKey) {
         if (te == null) {
             return;
         }
-        resolve();
-        if (!available) {
+        final MMReflection.Handles handles = MMReflection.handles();
+        if (handles == null) {
             return;
         }
-        final String durationKey = keyFor(sourceKey);
-        final String energyInKey = keyForEnergyIn(sourceKey);
-        final String energyOutKey = keyForEnergyOut(sourceKey);
+        final String durationKey = MMModifiers.durationKey(sourceKey);
+        final String energyInKey = MMModifiers.energyInKey(sourceKey);
+        final String energyOutKey = MMModifiers.energyOutKey(sourceKey);
         try {
-            final Method threadsGetter = getRecipeThreadListFor(te);
+            final Method threadsGetter = MMReflection.getRecipeThreadListFor(te);
             if (threadsGetter == null) {
                 return;
             }
@@ -427,22 +200,22 @@ public final class ModularMachineryAccelerator {
             for (final Object thread : threads) {
                 if (thread != null) {
                     // 升级迁移：清除旧版总线/魔杖 permanent modifier（若之前开过并残留）。
-                    purgeLegacyTimeBusKeys(thread);
+                    MMModifiers.purgeLegacy(handles, thread);
                     final Map<String, Object> permanent =
-                            (Map<String, Object>) getPermanentModifiers.invoke(thread);
+                            (Map<String, Object>) handles.getPermanentModifiers.invoke(thread);
                     final int before = permanent.size();
-                    removePermanentModifier.invoke(thread, durationKey);
-                    removePermanentModifier.invoke(thread, energyInKey);
-                    removePermanentModifier.invoke(thread, energyOutKey);
+                    handles.removePermanentModifier.invoke(thread, durationKey);
+                    handles.removePermanentModifier.invoke(thread, energyInKey);
+                    handles.removePermanentModifier.invoke(thread, energyOutKey);
                     removed += before - permanent.size();
                     // 半永久表：魔杖点击注入的配方加速。配方自然完成时 MM 会自行
                     // 清空；这里兜底配方中途拆机/区块卸载/关服等场景，幂等无害。
                     final Map<String, Object> semi =
-                            (Map<String, Object>) getSemiPermanentModifiers.invoke(thread);
+                            (Map<String, Object>) handles.getSemiPermanentModifiers.invoke(thread);
                     final int semiBefore = semi.size();
-                    removeModifier.invoke(thread, durationKey);
-                    removeModifier.invoke(thread, energyInKey);
-                    removeModifier.invoke(thread, energyOutKey);
+                    handles.removeModifier.invoke(thread, durationKey);
+                    handles.removeModifier.invoke(thread, energyInKey);
+                    handles.removeModifier.invoke(thread, energyOutKey);
                     removed += semiBefore - semi.size();
                 }
             }
@@ -455,12 +228,12 @@ public final class ModularMachineryAccelerator {
         } catch (Exception e) {
             TimeBus.LOGGER.warn("Time Bus: MM restore failed at {}: {}", te.getPos(), e.toString());
         } finally {
-            forgetInjected(te, sourceKey);
-            forgetSemiInjected(te, sourceKey);
+            MMTracking.forgetInjected(te, sourceKey);
+            MMTracking.forgetSemiInjected(te, sourceKey);
             // 同时清掉"已应用"快照与强制刷新记录：否则重新 apply 时会被
             // isAppliedState 快路径跳过，导致恢复加速后机器反而不加速。
-            forgetApplied(te, sourceKey);
-            forgetForceRefresh(te);
+            MMTracking.forgetApplied(te, sourceKey);
+            MMTracking.forgetForceRefresh(te);
         }
     }
 
@@ -473,15 +246,10 @@ public final class ModularMachineryAccelerator {
         if (world == null || sourceKey == null) {
             return;
         }
-        resolve();
-        if (!available) {
+        if (!available()) {
             return;
         }
-        final Set<BlockPos> positions;
-        synchronized (INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = INJECTED.get(world);
-            positions = byPos == null ? java.util.Collections.emptySet() : new HashSet<>(byPos.keySet());
-        }
+        final Set<BlockPos> positions = MMTracking.injectedPositions(world);
         for (final BlockPos pos : positions) {
             if (!world.isBlockLoaded(pos)) {
                 continue;
@@ -505,13 +273,12 @@ public final class ModularMachineryAccelerator {
         if (world == null) {
             return;
         }
-        resolve();
-        if (!available) {
+        if (!available()) {
             return;
         }
-        final List<Map.Entry<BlockPos, String>> pending =
-                collectPendingRestores(world, Integer.MIN_VALUE, Integer.MIN_VALUE);
-        for (final Map.Entry<BlockPos, String> e : pending) {
+        final List<Entry<BlockPos, String>> pending =
+                MMTracking.collectPendingRestores(world, Integer.MIN_VALUE, Integer.MIN_VALUE);
+        for (final Entry<BlockPos, String> e : pending) {
             final TileEntity te = world.getTileEntity(e.getKey());
             if (te != null) {
                 restore(te, e.getValue());
@@ -533,51 +300,17 @@ public final class ModularMachineryAccelerator {
         if (world == null || chunk == null) {
             return;
         }
-        resolve();
-        if (!available) {
+        if (!available()) {
             return;
         }
         final int chunkX = chunk.getPos().x;
         final int chunkZ = chunk.getPos().z;
-        final List<Map.Entry<BlockPos, String>> pending =
-                collectPendingRestores(world, chunkX, chunkZ);
-        for (final Map.Entry<BlockPos, String> e : pending) {
+        final List<Entry<BlockPos, String>> pending =
+                MMTracking.collectPendingRestores(world, chunkX, chunkZ);
+        for (final Entry<BlockPos, String> e : pending) {
             final TileEntity te = chunk.getTileEntityMap().get(e.getKey());
             if (te != null) {
                 restore(te, e.getValue());
-            }
-        }
-    }
-
-    /**
-     * 收集 (pos, sourceKey) 待恢复列表，合并遍历 {@link #INJECTED}（总线）与
-     * {@link #SEMI_INJECTED}（魔杖）两张追踪表。chunkX/chunkZ 传
-     * {@link Integer#MIN_VALUE} 表示不按区块过滤（全量）。
-     */
-    private static List<Map.Entry<BlockPos, String>> collectPendingRestores(final World world,
-                                                                            final int chunkX, final int chunkZ) {
-        final List<Map.Entry<BlockPos, String>> pending = new ArrayList<>();
-        collectFromTable(pending, world, INJECTED, chunkX, chunkZ);
-        collectFromTable(pending, world, SEMI_INJECTED, chunkX, chunkZ);
-        return pending;
-    }
-
-    private static void collectFromTable(final List<Map.Entry<BlockPos, String>> pending, final World world,
-                                         final Map<World, Map<BlockPos, Set<String>>> table,
-                                         final int chunkX, final int chunkZ) {
-        synchronized (table) {
-            final Map<BlockPos, Set<String>> byPos = table.get(world);
-            if (byPos == null || byPos.isEmpty()) {
-                return;
-            }
-            for (final Map.Entry<BlockPos, Set<String>> e : byPos.entrySet()) {
-                final BlockPos pos = e.getKey();
-                if (chunkX != Integer.MIN_VALUE && ((pos.getX() >> 4) != chunkX || (pos.getZ() >> 4) != chunkZ)) {
-                    continue;
-                }
-                for (final String sourceKey : e.getValue()) {
-                    pending.add(new AbstractMap.SimpleEntry<>(pos, sourceKey));
-                }
             }
         }
     }
@@ -587,12 +320,12 @@ public final class ModularMachineryAccelerator {
         if (te == null) {
             return false;
         }
-        resolve();
-        if (!available) {
+        final MMReflection.Handles handles = MMReflection.handles();
+        if (handles == null) {
             return false;
         }
         try {
-            final Method threadsGetter = getRecipeThreadListFor(te);
+            final Method threadsGetter = MMReflection.getRecipeThreadListFor(te);
             if (threadsGetter == null) {
                 return false;
             }
@@ -601,7 +334,7 @@ public final class ModularMachineryAccelerator {
                 return false;
             }
             for (final Object thread : threads) {
-                if (thread != null && getActiveRecipe.invoke(thread) != null) {
+                if (thread != null && handles.getActiveRecipe.invoke(thread) != null) {
                     return true;
                 }
             }
@@ -622,7 +355,7 @@ public final class ModularMachineryAccelerator {
      * 配方恢复原速。空闲线程不注入（它们没有当前配方，注入会让未来的配方也被
      * 加速）。重复点击幂等：同倍率跳过，不同倍率替换。
      *
-     * <p>兜底清理：注入成功的同时登记进 {@link #SEMI_INJECTED}。配方自然完成
+     * <p>兜底清理：注入成功的同时登记进 {@link MMTracking}。配方自然完成
      * 由 MM 自动清空；配方中途拆机、区块卸载或关服等场景由
      * {@link #restoreAllForWorld}/{@link #restoreAllForChunk}/{@link #restoreAll}
      * 统一摘除，双保险确保加速状态不会随存档残留。
@@ -633,13 +366,13 @@ public final class ModularMachineryAccelerator {
         if (te == null || speed <= 1 || sourceKey == null) {
             return false;
         }
-        resolve();
-        if (!available) {
+        final MMReflection.Handles handles = MMReflection.handles();
+        if (handles == null) {
             return false;
         }
-        final String durationKey = keyFor(sourceKey);
-        final String energyInKey = keyForEnergyIn(sourceKey);
-        final String energyOutKey = keyForEnergyOut(sourceKey);
+        final String durationKey = MMModifiers.durationKey(sourceKey);
+        final String energyInKey = MMModifiers.energyInKey(sourceKey);
+        final String energyOutKey = MMModifiers.energyOutKey(sourceKey);
         // 有效倍率封顶:与总线路径一致,防止叠加/极端配置把配方时长压到
         // 取整为 0/1 tick(见 MAX_MM_EFFECTIVE_SPEED 注释);能耗同步用该值。
         final int effectiveSpeed = Math.min(speed, MAX_MM_EFFECTIVE_SPEED);
@@ -647,7 +380,7 @@ public final class ModularMachineryAccelerator {
         final boolean scaleEnergy = TimeBusConfig.MM.mmEnergyFollowsSpeed;
         boolean touched = false;
         try {
-            final Method threadsGetter = getRecipeThreadListFor(te);
+            final Method threadsGetter = MMReflection.getRecipeThreadListFor(te);
             if (threadsGetter == null) {
                 return false;
             }
@@ -659,27 +392,30 @@ public final class ModularMachineryAccelerator {
                 if (thread == null) {
                     continue;
                 }
-                final Object active = getActiveRecipe.invoke(thread);
+                final Object active = handles.getActiveRecipe.invoke(thread);
                 if (active == null) {
                     continue; // 只加速正在运行的配方；空闲线程不注入
                 }
                 // 升级迁移：先清旧版 permanent 残留（v1.0.8 及以前的魔杖/总线注入），
                 // 避免与 semi-permanent 连乘。
-                purgeLegacyTimeBusKeys(thread);
-                if (ensureSemiModifier(thread, durationKey, recipeDurationType, ioInput, durationTarget)) {
+                MMModifiers.purgeLegacy(handles, thread);
+                if (MMModifiers.ensureSemi(handles, thread, durationKey,
+                                handles.recipeDurationType, handles.ioInput, durationTarget)) {
                     touched = true;
                 }
                 if (scaleEnergy) {
-                    if (ensureSemiModifier(thread, energyInKey, recipeEnergyType, ioInput, effectiveSpeed)) {
+                    if (MMModifiers.ensureSemi(handles, thread, energyInKey,
+                                handles.recipeEnergyType, handles.ioInput, effectiveSpeed)) {
                         touched = true;
                     }
-                    if (ensureSemiModifier(thread, energyOutKey, recipeEnergyType, ioOutput, effectiveSpeed)) {
+                    if (MMModifiers.ensureSemi(handles, thread, energyOutKey,
+                                handles.recipeEnergyType, handles.ioOutput, effectiveSpeed)) {
                         touched = true;
                     }
                 }
             }
             if (touched) {
-                rememberSemiInjected(te, sourceKey);
+                MMTracking.rememberSemiInjected(te, sourceKey);
                 TimeBus.LOGGER.info("Time Bus: wand MM semi-accelerated source={} speed={} at {} ({} threads, tile {})",
                         sourceKey, effectiveSpeed, te.getPos(), threads.length, te.getClass().getSimpleName());
             }
@@ -692,287 +428,33 @@ public final class ModularMachineryAccelerator {
 
     /** Remove every injected modifier in every world still tracked (server shutdown). */
     public static void restoreAll() {
-        resolve();
-        if (!available) {
+        if (!available()) {
             return;
         }
-        final List<World> worlds = new ArrayList<>();
-        synchronized (INJECTED) {
-            worlds.addAll(INJECTED.keySet());
-        }
-        // 纯魔杖注入(无总线)的世界只登记在 SEMI_INJECTED,也要覆盖(关服时
-        // 魔杖的半永久 modifier 同样不能残留进存档;日常由世界卸载事件兜底)。
-        synchronized (SEMI_INJECTED) {
-            for (final World world : SEMI_INJECTED.keySet()) {
-                if (!worlds.contains(world)) {
-                    worlds.add(world);
-                }
-            }
-        }
+        final List<World> worlds = MMTracking.trackedWorlds();
         for (final World world : worlds) {
             restoreAllForWorld(world);
         }
     }
 
-    private static void resolve() {
-        if (resolved) {
-            return;
-        }
-        synchronized (ModularMachineryAccelerator.class) {
-            if (resolved) {
-                return;
-            }
-            try {
-                controllerClass = Class.forName(
-                        "hellfirepvp.modularmachinery.common.tiles.base.TileMultiblockMachineController");
-                final Class<?> recipeThreadClass = Class.forName(
-                        "hellfirepvp.modularmachinery.common.machine.RecipeThread");
-                final Class<?> modifierClass = Class.forName(
-                        "hellfirepvp.modularmachinery.common.modifier.RecipeModifier");
-                final Class<?> requirementTypeClass = Class.forName(
-                        "hellfirepvp.modularmachinery.common.crafting.requirement.type.RequirementType");
-                final Class<?> ioTypeClass = Class.forName(
-                        "hellfirepvp.modularmachinery.common.machine.IOType");
-
-                getPermanentModifiers = recipeThreadClass.getMethod("getPermanentModifiers");
-                getModifier = modifierClass.getMethod("getModifier");
-                addPermanentModifier = recipeThreadClass.getMethod(
-                        "addPermanentModifier", String.class, modifierClass);
-                removePermanentModifier = recipeThreadClass.getMethod("removePermanentModifier", String.class);
-                getSemiPermanentModifiers = recipeThreadClass.getMethod("getSemiPermanentModifiers");
-                addModifier = recipeThreadClass.getMethod("addModifier", String.class, modifierClass);
-                removeModifier = recipeThreadClass.getMethod("removeModifier", String.class);
-                final Class<?> activeRecipeClass = Class.forName(
-                        "hellfirepvp.modularmachinery.common.crafting.ActiveMachineRecipe");
-                getActiveRecipe = recipeThreadClass.getMethod("getActiveRecipe");
-                recipeModifierCtor = modifierClass.getConstructor(
-                        requirementTypeClass, ioTypeClass, float.class, int.class, boolean.class);
-
-                final Field ioInputField = ioTypeClass.getField("INPUT");
-                ioInput = ioInputField.get(null);
-                ioOutput = ioTypeClass.getField("OUTPUT").get(null);
-                operationMultiply = modifierClass.getField("OPERATION_MULTIPLY").getInt(null);
-                // 配方时长与能耗专用 target；必须取注册过的实例，构造 modifier 时传给
-                // 第一个参数，否则序列化出空注册名（见 serialize()/deserialize()）。
-                final Class<?> requirementTypesClass = Class.forName(
-                        "hellfirepvp.modularmachinery.common.lib.RequirementTypesMM");
-                recipeDurationType = requirementTypesClass.getField("REQUIREMENT_DURATION").get(null);
-                recipeEnergyType = requirementTypesClass.getField("REQUIREMENT_ENERGY").get(null);
-                available = true;
-            } catch (Exception e) {
-                TimeBus.LOGGER.warn("Time Bus: MM acceleration unavailable: {}", e.toString());
-                available = false;
-            } finally {
-                resolved = true;
-            }
-        }
-    }
-
-    /** 该控制器当前是否仍被某个加速来源注入（时间总线/时间杖）。 */
+    /**
+     * 该控制器当前是否仍被某个加速来源注入（时间总线/时间杖）。
+     *
+     * <p>判定委托给 {@link MMTracking#isInjected(TileEntity)}：只看持续注入的总线
+     * 来源，魔杖的瞬时配方级加速不参与（否则工厂空闲线程会被长期保留）。
+     */
     public static boolean isAccelerated(final TileEntity te) {
-        if (te == null) {
-            return false;
-        }
-        synchronized (INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = INJECTED.get(te.getWorld());
-            if (byPos == null) {
-                return false;
-            }
-            final Set<String> sources = byPos.get(te.getPos());
-            return sources != null && !sources.isEmpty();
-        }
-    }
-
-    private static void rememberInjected(final TileEntity te, final String sourceKey) {
-        if (te == null || sourceKey == null) {
-            return;
-        }
-        synchronized (INJECTED) {
-            INJECTED.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
-                    .computeIfAbsent(te.getPos(), p -> new HashSet<>())
-                    .add(sourceKey);
-        }
-    }
-
-    private static void forgetInjected(final TileEntity te, final String sourceKey) {
-        if (te == null || sourceKey == null) {
-            return;
-        }
-        synchronized (INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = INJECTED.get(te.getWorld());
-            if (byPos == null) {
-                return;
-            }
-            final Set<String> sources = byPos.get(te.getPos());
-            if (sources != null) {
-                sources.remove(sourceKey);
-                if (sources.isEmpty()) {
-                    byPos.remove(te.getPos());
-                }
-            }
-            if (byPos.isEmpty()) {
-                INJECTED.remove(te.getWorld());
-            }
-        }
-        // 同步清理各状态缓存，避免拆除/过期后残留（代码审查 4.4）。
-        forgetApplied(te, sourceKey);
-        forgetForceRefresh(te);
-    }
-
-    /** 记录魔杖 semi-permanent 注入（见 {@link #SEMI_INJECTED} 的说明）。 */
-    private static void rememberSemiInjected(final TileEntity te, final String sourceKey) {
-        if (te == null || sourceKey == null) {
-            return;
-        }
-        synchronized (SEMI_INJECTED) {
-            SEMI_INJECTED.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
-                    .computeIfAbsent(te.getPos(), p -> new HashSet<>())
-                    .add(sourceKey);
-        }
-    }
-
-    private static void forgetSemiInjected(final TileEntity te, final String sourceKey) {
-        if (te == null || sourceKey == null) {
-            return;
-        }
-        synchronized (SEMI_INJECTED) {
-            final Map<BlockPos, Set<String>> byPos = SEMI_INJECTED.get(te.getWorld());
-            if (byPos == null) {
-                return;
-            }
-            final Set<String> sources = byPos.get(te.getPos());
-            if (sources != null) {
-                sources.remove(sourceKey);
-                if (sources.isEmpty()) {
-                    byPos.remove(te.getPos());
-                }
-            }
-            if (byPos.isEmpty()) {
-                SEMI_INJECTED.remove(te.getWorld());
-            }
-        }
+        return MMTracking.isInjected(te);
     }
 
     /**
-     * True if the key is a legacy TimeBus permanent modifier that must be purged
-     * on upgrade: pre-1.0.9 bus keys ("bus:x,y,z" without the part side) and any
-     * wand key in the permanent table (since v1.0.9 the wand only uses the
-     * semi-permanent table; a wand key in permanent is always a pre-upgrade
-     * leftover that would multiply with the new semi-permanent modifier and
-     * instantly finish recipes).
+     * MM 反射是否可用（首次调用时惰性解析，失败后不再重试）。
+     *
+     * <p>与 {@link MMReflection#handles()} 返回 null 等价；需要句柄的路径直接持有
+     * {@code Handles} 做空检查，因此这里只给不关心句柄的编排方法用。
      */
-    private static boolean isLegacyTimeBusKey(final String key) {
-        if (key == null) {
-            return false;
-        }
-        final String[] legacyBusPrefixes = {
-                MODIFIER_KEY_PREFIX + ":bus:",
-                ENERGY_KEY_PREFIX + ":in:bus:",
-                ENERGY_KEY_PREFIX + ":out:bus:"
-        };
-        for (final String prefix : legacyBusPrefixes) {
-            if (key.startsWith(prefix)) {
-                final String rest = key.substring(prefix.length());
-                return rest.indexOf(':') < 0 && rest.matches("\\d+,\\d+,\\d+");
-            }
-        }
-        // 旧版魔杖永久注入：duration / energy-in / energy-out 三个 key 前缀。
-        return key.startsWith(MODIFIER_KEY_PREFIX + ":wand:")
-                || key.startsWith(ENERGY_KEY_PREFIX + ":in:wand:")
-                || key.startsWith(ENERGY_KEY_PREFIX + ":out:wand:");
-    }
-
-    /**
-     * 清除线程 permanent 表里所有旧版 TimeBus modifier（升级迁移）。
-     * 返回清除数量，便于日志。
-     */
-    private static int purgeLegacyTimeBusKeys(final Object thread) throws Exception {
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> permanent = (Map<String, Object>) getPermanentModifiers.invoke(thread);
-        if (permanent.isEmpty()) {
-            return 0;
-        }
-        final List<String> legacy = new ArrayList<>();
-        for (final String key : permanent.keySet()) {
-            if (isLegacyTimeBusKey(key)) {
-                legacy.add(key);
-            }
-        }
-        for (final String key : legacy) {
-            removePermanentModifier.invoke(thread, key);
-        }
-        if (!legacy.isEmpty()) {
-            TimeBus.LOGGER.info("Time Bus: purged {} legacy permanent MM modifier key(s) {}", legacy.size(), legacy);
-        }
-        return legacy.size();
-    }
-
-    private static boolean isAppliedState(final TileEntity te, final String sourceKey,
-                                          final int speed, final boolean energyFollows) {
-        if (te == null || te.getWorld() == null || sourceKey == null) {
-            return false;
-        }
-        synchronized (APPLIED) {
-            final Map<BlockPos, Map<String, AppliedState>> byPos = APPLIED.get(te.getWorld());
-            if (byPos == null) {
-                return false;
-            }
-            final Map<String, AppliedState> bySource = byPos.get(te.getPos());
-            if (bySource == null) {
-                return false;
-            }
-            final AppliedState state = bySource.get(sourceKey);
-            return state != null && state.speed == speed && state.energyFollows == energyFollows;
-        }
-    }
-
-    private static void rememberApplied(final TileEntity te, final String sourceKey,
-                                        final int speed, final boolean energyFollows) {
-        if (te == null || te.getWorld() == null || sourceKey == null) {
-            return;
-        }
-        synchronized (APPLIED) {
-            APPLIED.computeIfAbsent(te.getWorld(), w -> new HashMap<>())
-                    .computeIfAbsent(te.getPos(), p -> new HashMap<>())
-                    .put(sourceKey, new AppliedState(speed, energyFollows));
-        }
-    }
-
-    private static void forgetApplied(final TileEntity te, final String sourceKey) {
-        if (te == null || te.getWorld() == null || sourceKey == null) {
-            return;
-        }
-        synchronized (APPLIED) {
-            final Map<BlockPos, Map<String, AppliedState>> byPos = APPLIED.get(te.getWorld());
-            if (byPos == null) {
-                return;
-            }
-            final Map<String, AppliedState> bySource = byPos.get(te.getPos());
-            if (bySource != null) {
-                bySource.remove(sourceKey);
-                if (bySource.isEmpty()) {
-                    byPos.remove(te.getPos());
-                }
-            }
-            if (byPos.isEmpty()) {
-                APPLIED.remove(te.getWorld());
-            }
-        }
-    }
-
-    private static void forgetForceRefresh(final TileEntity te) {
-        if (te == null || te.getWorld() == null) {
-            return;
-        }
-        synchronized (LAST_FORCE_REFRESH) {
-            final Map<BlockPos, Long> byPos = LAST_FORCE_REFRESH.get(te.getWorld());
-            if (byPos != null) {
-                byPos.remove(te.getPos());
-                if (byPos.isEmpty()) {
-                    LAST_FORCE_REFRESH.remove(te.getWorld());
-                }
-            }
-        }
+    private static boolean available() {
+        return MMReflection.handles() != null;
     }
 
 }
