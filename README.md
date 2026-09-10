@@ -90,13 +90,52 @@ An AE-powered, 512-byte **fluid storage cell** that holds only Time Fluid (model
 - Minecraft 1.12.2
 - CleanroomLoader (`0.5.17-alpha` or compatible)
 - AE2 Extended Life (`rv6-stable-7` or newer)
-- Java 17 (Gradle runtime) + Java 25 (compile toolchain)
+- **Two JDKs, for two different jobs** — see [Build](#build) below for setup
 
 
 ## Build
 
+> ⚠️ **This project needs two JDKs at the same time, and they do different jobs.**
+> Setting up only one of them is the most common cause of a broken build.
+
+| Job | JDK | How Gradle finds it |
+| --- | --- | --- |
+| **Run Gradle itself** | **17** | `JAVA_HOME` (or the `java` on `PATH`) |
+| **Compile the mod** (toolchain) | **25** | `JDK25` env var, otherwise auto-detected |
+
+Gradle 8.10 **cannot run on JDK 25**. It fails during configuration with:
+
+```
+BUG! exception in phase 'semantic analysis' in source unit '_BuildScript_' Unsupported class file major version 69
+```
+
+(`69` is the class file major version of Java 25.) So `JAVA_HOME` must point at a JDK that
+Gradle 8.10 supports — Java 17 is recommended — while the **compile toolchain independently
+needs JDK 25**. They do not have to be the same installation.
+
+`gradle.properties` wires the toolchain up with:
+
+```properties
+org.gradle.java.installations.fromEnv=JDK25
+```
+
+so Gradle looks for an environment variable named `JDK25`. Point both variables at your
+installs before building:
+
 ```bat
+set JAVA_HOME=C:\path\to\jdk-17
+set JDK25=C:\path\to\jdk-25
 gradlew.bat build
+```
+
+If `JDK25` is unset, Gradle falls back to auto-detection (Windows registry, common install
+directories, IntelliJ-managed JDKs). That usually happens to work on a Windows dev box, but it
+is **not reliable on Linux/macOS or in CI** — set it explicitly there.
+
+Confirm Gradle can actually see the toolchain before blaming the code:
+
+```bat
+gradlew.bat -q javaToolchains
 ```
 
 Output jars land in `build/libs/`:

@@ -152,6 +152,10 @@ task publishCurseForge(type: net.darkhax.curseforgegradle.TaskPublishCurseForge)
 
 processResources {
     rename '(.+_at.cfg)', 'META-INF/$1'
+    // 设计源文件（PSD/PSB）永不打包：v1.0.16 的 jar 里曾混入 194 KB 设计稿，
+    // 占解压体积 33%。母版现存放于仓库根的 design/，这里再兜底排除一次，
+    // 防止有人把源文件放回 resources 时重新被打进发布 jar。
+    exclude '**/*.psd', '**/*.psb'
     filesMatching('mcmod.info') {
         expand 'mod_version': mod_version,
                'mod_url': mod_url,

@@ -95,13 +95,49 @@
 - Minecraft 1.12.2
 - CleanroomLoader（`0.5.17-alpha` 或兼容版本）
 - AE2 Extended Life（`rv6-stable-7` 或更新）
-- Java 17（Gradle 运行）+ Java 25（编译工具链）
+- **两个 JDK，各司其职** —— 配置方法见下方[构建](#构建)章节
 
 
 ## 构建
 
+> ⚠️ **本项目需要同时准备两个 JDK**，它们负责的事情并不一样。
+> 只配其中一个，是构建失败最常见的原因。
+
+| 用途 | 需要的 JDK | Gradle 如何找到它 |
+| --- | --- | --- |
+| **运行 Gradle 本身** | **17** | `JAVA_HOME`（或 `PATH` 上的 java） |
+| **编译模组**（toolchain） | **25** | `JDK25` 环境变量，否则自动探测 |
+
+Gradle 8.10 **无法在 JDK 25 上运行**，会在配置阶段直接报错：
+
+```
+BUG! exception in phase 'semantic analysis' in source unit '_BuildScript_' Unsupported class file major version 69
+```
+
+（`69` 即 Java 25 的 class 文件版本号。）所以 `JAVA_HOME` 必须指向 Gradle 8.10 兼容的
+JDK（推荐 Java 17），而**编译工具链另外需要 JDK 25**——两者不要求是同一个安装。
+
+`gradle.properties` 中这样接入工具链：
+
+```properties
+org.gradle.java.installations.fromEnv=JDK25
+```
+
+即 Gradle 会去找名为 `JDK25` 的环境变量。构建前把两个变量都指向对应的安装目录：
+
 ```bat
+set JAVA_HOME=C:\path\to\jdk-17
+set JDK25=C:\path\to\jdk-25
 gradlew.bat build
+```
+
+若未设置 `JDK25`，Gradle 会退回到自动探测（Windows 注册表、常见安装目录、IntelliJ 托管的
+JDK）。这在 Windows 开发机上通常能蒙对，但在 **Linux/macOS 或 CI 上并不可靠**——请显式设置。
+
+排查构建问题前，先用这条命令确认 Gradle 能看到工具链：
+
+```bat
+gradlew.bat -q javaToolchains
 ```
 
 产物输出到 `build/libs/`：

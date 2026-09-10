@@ -25,9 +25,14 @@ gradle-app.setting
 # IDEA config
 .idea
 
-# Design source files (not committed)
+# Design source files: the editable originals live in design/ and ARE tracked
+# (they are the masters for the shipped PNGs). Everywhere else *.psd / *.psb
+# stay ignored, so they can never sneak back into src/main/resources and get
+# packaged into the jar -- see design/README.md and build.gradle's
+# processResources exclude.
 *.psb
 *.psd
+!design/**
 
 # Local-only files (kept locally, not uploaded)
 MCMOD_CN.md
